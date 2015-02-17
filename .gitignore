@@ -43,3 +43,5 @@ Temporary Items
 .apdisk
 .settings/org.eclipse.core.resources.prefs
 tmp/local.htm
+.project
+.pydevproject
