@@ -11,6 +11,9 @@ import re
 from collections import deque
 from asyncio.queues import Queue
 
+def python_cnt(str):
+    return str.count("python")
+
 if __name__ == "__main__":
     start_url = "http://news.dbanotes.net/"
     
@@ -18,6 +21,7 @@ if __name__ == "__main__":
     visited = set()
     
     cnt = 0
+    py_str_cnt = 0
     to_be_visited.append(start_url)
     
     while to_be_visited:
@@ -28,7 +32,7 @@ if __name__ == "__main__":
         try:
             urlfd =  urllib.request.urlopen(url)
         except Exception as ex:
-            print( "URL " + "\"" + url + "\"" + "crawling failed. " + str(ex))
+            print( "URL " + "\"" + url + "\"" + " crawling failed. " + str(ex))
             continue
             
         if "html" not in urlfd.getheader("Content-Type"):
@@ -42,6 +46,11 @@ if __name__ == "__main__":
         cnt += 1
         visited |= {url}
         
+        py_cnt_tmp = python_cnt(html_str)
+        if py_cnt_tmp != 0:
+            py_str_cnt += py_cnt_tmp
+            print("Find %d \"python\" , total count %d" % (py_cnt_tmp, py_str_cnt))
+
         #todo: parse the html_str
         
         link_pattern = re.compile('href=\"(.+?)\"') #links' regular expression       
