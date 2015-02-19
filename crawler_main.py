@@ -1,24 +1,52 @@
+"""
+crawler study code 
+
+Author: smilexie1113@gmail.com
+
+"""
+
 import urllib.request
 import os
-import sys
-
-"""crawler study code """
+import re
+from collections import deque
+from asyncio.queues import Queue
 
 if __name__ == "__main__":
-    search_info = {}
-    search_info["word"] = "2015羊年"
-    search_str = urllib.parse.urlencode(search_info)
-    url_pre = "http://www.baidu.com/s?"
-    url_full = url_pre + search_str
-    data = urllib.request.urlopen(url_full).read()
-    web_str = data.decode("utf-8")
+    start_url = "http://news.dbanotes.net/"
     
-    try:
-        if not os.path.exists("tmp"):
-            os.mkdir("tmp")
-        with open("tmp/local.htm", "w", encoding='utf-8') as local_file:
-            local_file.write(web_str)
+    to_be_visited = deque()
+    visited = set()
+    
+    cnt = 0
+    to_be_visited.append(start_url)
+    
+    while to_be_visited:
+        url = to_be_visited.popleft()        
+        
+        print(str(cnt) + "page(s) has been grabbed." + "URL " + "\"" + url + "\"" + " is being grabbed.")
+        
+        try:
+            urlfd =  urllib.request.urlopen(url)
+        except Exception as ex:
+            print( "URL " + "\"" + url + "\"" + "crawling failed. " + str(ex))
+            continue
             
-    except IOError as e:
-        print("Could not open file:", e)
+        if "html" not in urlfd.getheader("Content-Type"):
+            continue
+        
+        try:
+            html_str = urlfd.read().decode("utf-8")
+        except:
+            continue
+        
+        cnt += 1
+        visited |= {url}
+        
+        #todo: parse the html_str
+        
+        link_pattern = re.compile('href=\"(.+?)\"') #links' regular expression       
+        for tmp_url in link_pattern.findall(html_str):
+            if "http" in tmp_url and tmp_url not in visited:
+                to_be_visited.append(tmp_url)
+        
 
