@@ -9,10 +9,33 @@ import urllib.request
 import os
 import re
 from collections import deque
-from asyncio.queues import Queue
+from filecmp import cmp
+
+ERROR_RETURN = "ERROR:"
+def retrun_is_error(return_str):
+    return return_str[0 : len(ERROR_RETURN)] == ERROR_RETURN
+        
 
 def python_cnt(str):
     return str.count("python")
+
+
+def get_one_page(url):
+    try:
+        urlfd =  urllib.request.urlopen(url, timeout = 2)
+    except Exception as ex:
+        return ERROR_RETURN + ("URL " + "\"" + url + "\"" + " open failed. " + str(ex))
+        
+    if "html" not in urlfd.getheader("Content-Type"):
+        return ERROR_RETURN + ("URL " + "\"" + url + "\"" + "is not html page.")
+    
+    try:
+        html_str = urlfd.read().decode("utf-8")
+    except:
+        return ERROR_RETURN + ("Fail to decode URL " + "\"" + url + "\"" + ".")
+    
+    return html_str
+
 
 if __name__ == "__main__":
     start_url = "http://news.dbanotes.net/"
@@ -29,19 +52,10 @@ if __name__ == "__main__":
         
         print(str(cnt) + "page(s) has been grabbed." + "URL " + "\"" + url + "\"" + " is being grabbed.")
         
-        try:
-            urlfd =  urllib.request.urlopen(url)
-        except Exception as ex:
-            print( "URL " + "\"" + url + "\"" + " crawling failed. " + str(ex))
-            continue
-            
-        if "html" not in urlfd.getheader("Content-Type"):
-            continue
-        
-        try:
-            html_str = urlfd.read().decode("utf-8")
-        except:
-            continue
+        html_str = get_one_page(url)
+        if retrun_is_error(html_str):
+            print(html_str)
+            continue            
         
         cnt += 1
         visited |= {url}
