@@ -9,9 +9,8 @@ import urllib.request
 import os
 import re
 from collections import deque
-from filecmp import cmp
 
-ERROR_RETURN = "ERROR:"
+ERROR_RETURN = "ERROR: "
 def retrun_is_error(return_str):
     return return_str[0 : len(ERROR_RETURN)] == ERROR_RETURN
         
@@ -59,7 +58,7 @@ if __name__ == "__main__":
         
         cnt += 1
         visited |= {url}
-        
+                
         py_cnt_tmp = python_cnt(html_str)
         if py_cnt_tmp != 0:
             py_str_cnt += py_cnt_tmp
@@ -67,7 +66,7 @@ if __name__ == "__main__":
 
         #todo: parse the html_str
         
-        link_pattern = re.compile('href=\"(.+?)\"') #links' regular expression       
+        link_pattern = re.compile('href=\"(.+?)\"') #regular expression       
         for tmp_url in link_pattern.findall(html_str):
             if "http" in tmp_url and tmp_url not in visited:
                 to_be_visited.append(tmp_url)
