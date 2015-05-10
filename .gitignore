@@ -47,3 +47,6 @@ tmp/local.htm
 .pydevproject
 1.htm
 2.htm
+__pycache__/crawler_main.cpython-34.pyc
+login_page.htm
+pre_page.htm

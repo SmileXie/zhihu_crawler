@@ -5,6 +5,7 @@ Author: smilexie1113@gmail.com
 
 """
 import requests
+import codecs 
 from bs4 import BeautifulSoup
 
 class ZhihuInspect(object):
@@ -18,20 +19,20 @@ class ZhihuInspect(object):
         'DNT': '1'
     }
     url = r"http://www.zhihu.com/"
-    id = r"xxxxx"
-    password = r"xxxxx"
+    id = r"xxxxxx"
+    password = r"xxxxxx"
     
     def __init__(self):
         pass
-    
-    def save_file(self, path, str):
-        with open(path, 'w') as fp:
+
+    def save_file(self, path, str, encoding):
+        with codecs.open(path, 'w', encoding)  as fp: #文件编码要与str编码一致
             fp.write(str)
     
     def get_xsrf(self):
         response = requests.get(self.url, headers = self.header)
         text = response.text
-        save_file("1.htm", text)
+        self.save_file("pre_page.htm", text, response.encoding)
         soup = BeautifulSoup(text);
         input_tag = soup.find("input", {"name": "_xsrf"})
         xsrf = input_tag["value"]
@@ -46,11 +47,12 @@ class ZhihuInspect(object):
             '_xsrf':xsrf    
         }
         reponse_login = requests.post(login_url, headers = self.header, data = post_dict)
-        save_file('2.htm', reponse_login.text)
+        self.save_file('login_page.htm', reponse_login.text, reponse_login.encoding)
     
 if __name__ == "__main__":
     z = ZhihuInspect()
     xsrf = z.get_xsrf()
     z.get_login_page(xsrf)
+    print("ok\n")
     
     
