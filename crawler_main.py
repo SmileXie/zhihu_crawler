@@ -26,7 +26,7 @@ class ZhihuInspect(object):
         pass
 
     def save_file(self, path, str, encoding):
-        with codecs.open(path, 'w', encoding)  as fp: #文件编码要与str编码一致
+        with codecs.open(path, 'w', encoding)  as fp:
             fp.write(str)
     
     def get_xsrf(self):
@@ -48,6 +48,17 @@ class ZhihuInspect(object):
         }
         reponse_login = requests.post(login_url, headers = self.header, data = post_dict)
         self.save_file('login_page.htm', reponse_login.text, reponse_login.encoding)
+        self.get_people(reponse_login.text)
+        
+    def get_people(self, html_text): #打印用户的链接
+        soup = BeautifulSoup(html_text)
+        for link in soup.find_all("a"):
+            try:
+                if link["href"].index("http://www.zhihu.com/people/") == 0:
+                    print(link["href"])
+            except:
+                pass
+        
     
 if __name__ == "__main__":
     z = ZhihuInspect()
