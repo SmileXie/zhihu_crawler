@@ -6,3 +6,6 @@
 
 2015-05-10
 初步实现使用Request和BeautifulSoup库登录知乎，爬个页面下来。
+
+todo_list:
+1、http://www.zhihu.com/explore可作为启始页面。且无需登录即可爬个页面下来
