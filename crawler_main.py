@@ -19,8 +19,8 @@ class ZhihuInspect(object):
         'DNT': '1'
     }
     url = r"http://www.zhihu.com/"
-    id = r"xxxxxx"
-    password = r"xxxxxx"
+    id = r"xxxxx"
+    password = r"xxxxx"
     
     def __init__(self):
         pass
@@ -29,22 +29,23 @@ class ZhihuInspect(object):
         with codecs.open(path, 'w', encoding)  as fp:
             fp.write(str)
     
-    def get_xsrf(self):
+    def init_xsrf(self):
+        """初始化，获取xsrf"""
         response = requests.get(self.url, headers = self.header)
         text = response.text
         self.save_file("pre_page.htm", text, response.encoding)
         soup = BeautifulSoup(text);
         input_tag = soup.find("input", {"name": "_xsrf"})
         xsrf = input_tag["value"]
-        return xsrf
+        self.xsrf = xsrf
         
-    def get_login_page(self, xsrf):
+    def get_login_page(self):
         login_url = self.url + r"login"
         post_dict = {
             'rememberme': 'y',
             'password': self.password,
             'email': self.id,
-            '_xsrf':xsrf    
+            '_xsrf':self.xsrf    
         }
         reponse_login = requests.post(login_url, headers = self.header, data = post_dict)
         self.save_file('login_page.htm', reponse_login.text, reponse_login.encoding)
@@ -62,8 +63,8 @@ class ZhihuInspect(object):
     
 if __name__ == "__main__":
     z = ZhihuInspect()
-    xsrf = z.get_xsrf()
-    z.get_login_page(xsrf)
+    xsrf = z.init_xsrf()
+    z.get_login_page()
     print("ok\n")
     
     
