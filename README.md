@@ -13,4 +13,5 @@
 todo_list:
 
 1、http://www.zhihu.com/explore 可作为启始页面。且无需登录即可爬个页面下来. done
+
 2、建立知乎用户数据库，收集点赞数等属性。
