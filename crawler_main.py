@@ -1,5 +1,5 @@
 """
-crawler study code 
+Zhihu bigdata 
 
 Author: smilexie1113@gmail.com
 
@@ -19,15 +19,16 @@ class ZhihuInspect(object):
         'DNT': '1'
     }
     url = r"http://www.zhihu.com/"
+    first_url = r"http://www.zhihu.com/explore"
     id = r"xxxxx"
     password = r"xxxxx"
     
     def __init__(self):
         pass
 
-    def save_file(self, path, str, encoding):
+    def save_file(self, path, str_content, encoding):
         with codecs.open(path, 'w', encoding)  as fp:
-            fp.write(str)
+            fp.write(str_content)
     
     def init_xsrf(self):
         """初始化，获取xsrf"""
@@ -40,6 +41,7 @@ class ZhihuInspect(object):
         self.xsrf = xsrf
         
     def get_login_page(self):
+        """获取登录后的界面，需要先运行init_xsrf"""
         login_url = self.url + r"login"
         post_dict = {
             'rememberme': 'y',
@@ -55,16 +57,22 @@ class ZhihuInspect(object):
         soup = BeautifulSoup(html_text)
         for link in soup.find_all("a"):
             try:
-                if link["href"].index("http://www.zhihu.com/people/") == 0:
+                if link["href"].find("http://www.zhihu.com/people/") == 0:
                     print(link["href"])
-            except:
+            except KeyError:
+                #html页面中 a标签下无href属性，不处理 
                 pass
+    
+    def get_first_page(self):
+        response = requests.get(self.first_url, headers = self.header)
+        text = response.text
+        self.save_file("first_page.htm", text, response.encoding)
+        self.get_people(text)
         
     
 if __name__ == "__main__":
     z = ZhihuInspect()
-    xsrf = z.init_xsrf()
-    z.get_login_page()
+    z.get_first_page()
     print("ok\n")
     
     
