@@ -20,7 +20,7 @@ class ZhihuInspect(object):
     }
     url = r"http://www.zhihu.com/"
     first_url = r"http://www.zhihu.com/explore"
-    id = r"xxxxx"
+    email = r"xxxxx"
     password = r"xxxxx"
     first_user_page_is_save = False
     
@@ -47,7 +47,7 @@ class ZhihuInspect(object):
         post_dict = {
             'rememberme': 'y',
             'password': self.password,
-            'email': self.id,
+            'email': self.email,
             '_xsrf':self.xsrf    
         }
         reponse_login = requests.post(login_url, headers = self.header, data = post_dict)
