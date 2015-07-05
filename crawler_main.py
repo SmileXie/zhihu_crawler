@@ -44,6 +44,11 @@ class ZhihuInspect(object):
             print(str)
         #todo: write log file.
     
+    def print_all_user(self):
+        for user in self.users:
+            print(user)
+        
+    
     def init_xsrf(self):
         """初始化，获取xsrf"""
         response = requests.get(self.url, headers = self.header)
@@ -111,22 +116,30 @@ class ZhihuInspect(object):
 
 class ZhihuUser(object):
     debug_level = DebugLevel.verbose
+        
+    def __init__(self, name, agree_cnt, thank_cnt):
+        self.debug_print(DebugLevel.verbose, "new user:" + name + " agree:" + 
+                         str(agree_cnt) + " thank:" + str(thank_cnt))
+        self.name = name
+        self.agree_cnt = agree_cnt
+        self.thank_cnt = thank_cnt
+        pass
     
     def debug_print(self, level, str):
         if level.value >= self.debug_level.value:
             print(str)
-            
-    def __init__(self, name, agree_cnt, thank_cnt):
-        self.debug_print(DebugLevel.verbose, "new user:" + name + " agree:" + 
-                         str(agree_cnt) + " thank:" + str(thank_cnt))
-        pass
     
-
+    def __str__(self):
+        #print类的实例打印的字符串
+        return "User " + self.name + " agree: " + str(self.agree_cnt) + ", " \
+            "thank: " + str(self.thank_cnt)
+    
 if __name__ == "__main__":
     z = ZhihuInspect()
     first_page = z.get_first_page()
     user_urls = z.get_user_url(first_page)
     z.process_user_urls(user_urls)
+    z.print_all_user()
     
     print("ok\n")
     
