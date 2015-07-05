@@ -7,6 +7,13 @@ Author: smilexie1113@gmail.com
 import requests
 import codecs 
 from bs4 import BeautifulSoup
+from enum import Enum
+
+class DebugLevel(Enum):
+    verbose = 1
+    warning = 2
+    error = 3
+    end = 4
 
 class ZhihuInspect(object):
     header = {
@@ -22,7 +29,8 @@ class ZhihuInspect(object):
     first_url = r"http://www.zhihu.com/explore"
     email = r"xxxxx"
     password = r"xxxxx"
-    first_user_page_is_save = False
+    debug_level = DebugLevel.verbose
+    users = []
     
     def __init__(self):
         pass
@@ -30,6 +38,11 @@ class ZhihuInspect(object):
     def save_file(self, path, str_content, encoding):
         with codecs.open(path, 'w', encoding)  as fp:
             fp.write(str_content)
+    
+    def debug_print(self, level, str):
+        if level.value >= self.debug_level.value:
+            print(str)
+        #todo: write log file.
     
     def init_xsrf(self):
         """初始化，获取xsrf"""
@@ -71,17 +84,25 @@ class ZhihuInspect(object):
             self.parse_user_page(user_url)
     
     def parse_user_page(self, url):
-        response = requests.get(url, headers = self.header) #todo 有些页面发现返回200，但页面是空的
-        if not self.first_user_page_is_save:
-            self.save_file("user_page.htm", response.text, response.encoding)
-            self.first_user_page_is_save = True
-        soup = BeautifulSoup(response.text)
-        #class_即是查找class，因为class是保留字，bs框架做了转化
-        agree_tag = soup.find("span", class_="zm-profile-header-user-agree") 
-        aggre_cnt = agree_tag.contents[1].contents[0]
-        pass
-
-    
+        self.debug_print(DebugLevel.verbose, "parse " + url)
+        response = requests.get(url, headers = self.header) #todo 有些页面发现返回200，但页面是空的, 或是首页
+        self.save_file("user_page.htm", response.text, response.encoding)
+        self.first_user_page_is_save = True
+        soup = BeautifulSoup(response.text)        
+        
+        try:
+            #class_即是查找class，因为class是保留字，bs框架做了转化
+            name_tag = soup.find("span", class_="name")
+            name = name_tag.contents[0]
+            agree_tag = soup.find("span", class_="zm-profile-header-user-agree") 
+            agree_cnt = agree_tag.contents[1].contents[0]
+            thank_tag = soup.find("span", class_="zm-profile-header-user-thanks") 
+            thank_cnt = thank_tag.contents[1].contents[0]
+            user = ZhihuUser(name, int(agree_cnt), int(thank_cnt))
+            self.users.append(user)
+        except AttributeError:
+            self.debug_print(DebugLevel.warning, "fail to parse " + url)
+            
     def get_first_page(self):
         response = requests.get(self.first_url, headers = self.header)
         text = response.text
@@ -89,7 +110,15 @@ class ZhihuInspect(object):
         return text
 
 class ZhihuUser(object):
-    def __init__(self):
+    debug_level = DebugLevel.verbose
+    
+    def debug_print(self, level, str):
+        if level.value >= self.debug_level.value:
+            print(str)
+            
+    def __init__(self, name, agree_cnt, thank_cnt):
+        self.debug_print(DebugLevel.verbose, "new user:" + name + " agree:" + 
+                         str(agree_cnt) + " thank:" + str(thank_cnt))
         pass
     
 

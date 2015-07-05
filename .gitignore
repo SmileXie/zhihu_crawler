@@ -50,3 +50,4 @@ tmp/local.htm
 __pycache__/crawler_main.cpython-34.pyc
 login_page.htm
 pre_page.htm
+*.htm
