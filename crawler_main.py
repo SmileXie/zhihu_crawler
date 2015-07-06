@@ -25,7 +25,7 @@ class ZhihuInspect(object):
         'Host': 'www.zhihu.com',
         'DNT': '1'
     }
-    url = r"http://www.zhihu.com/"
+    base_url = r"http://www.zhihu.com/"
     first_url = r"http://www.zhihu.com/explore"
     email = r"xxxxx"
     password = r"xxxxx"
@@ -39,19 +39,27 @@ class ZhihuInspect(object):
         with codecs.open(path, 'w', encoding)  as fp:
             fp.write(str_content)
     
-    def debug_print(self, level, str):
+    def debug_print(self, level, log_str):
         if level.value >= self.debug_level.value:
-            print(str)
+            print(log_str)
         #todo: write log file.
     
     def print_all_user(self):
         for user in self.users:
             print(user)
-        
+    
+    def add_user(self, user):
+        for user_node in self.users:
+            if user_node.name == user.name:
+                user_node.agree_cnt = user.agree_cnt
+                user_node.thank_cnt = user.thank_cnt
+                break;        
+        else:
+            self.users.append(user)           
     
     def init_xsrf(self):
         """初始化，获取xsrf"""
-        response = requests.get(self.url, headers = self.header)
+        response = requests.get(self.base_url, headers = self.header)
         text = response.text
         self.save_file("pre_page.htm", text, response.encoding)
         soup = BeautifulSoup(text);
@@ -61,7 +69,7 @@ class ZhihuInspect(object):
         
     def get_login_page(self):
         """获取登录后的界面，需要先运行init_xsrf"""
-        login_url = self.url + r"login"
+        login_url = self.base_url + r"login"
         post_dict = {
             'rememberme': 'y',
             'password': self.password,
@@ -79,6 +87,8 @@ class ZhihuInspect(object):
             try:
                 if a_tag["href"].find("http://www.zhihu.com/people/") == 0:
                     user_url.append(a_tag["href"])
+                elif a_tag["href"].find("/people/") == 0:
+                    user_url.append(r"http://www.zhihu.com" + a_tag["href"])
             except KeyError:
                 #html页面中 a标签下无href属性，不处理 
                 pass
@@ -104,7 +114,7 @@ class ZhihuInspect(object):
             thank_tag = soup.find("span", class_="zm-profile-header-user-thanks") 
             thank_cnt = thank_tag.contents[1].contents[0]
             user = ZhihuUser(name, int(agree_cnt), int(thank_cnt))
-            self.users.append(user)
+            self.add_user(user)
         except AttributeError:
             self.debug_print(DebugLevel.warning, "fail to parse " + url)
             
@@ -125,9 +135,9 @@ class ZhihuUser(object):
         self.thank_cnt = thank_cnt
         pass
     
-    def debug_print(self, level, str):
+    def debug_print(self, level, log_str):
         if level.value >= self.debug_level.value:
-            print(str)
+            print(log_str)
     
     def __str__(self):
         #print类的实例打印的字符串
