@@ -29,7 +29,7 @@ class ZhihuInspect(object):
     first_url = r"http://www.zhihu.com/explore"
     email = r"xxxxx"
     password = r"xxxxx"
-    debug_level = DebugLevel.verbose
+    debug_level = DebugLevel.end
     users = []
     
     def __init__(self):
@@ -45,6 +45,7 @@ class ZhihuInspect(object):
         #todo: write log file.
     
     def print_all_user(self):
+        print("user num: " + str(len(self.users)))
         for user in self.users:
             print(user)
     
@@ -80,7 +81,7 @@ class ZhihuInspect(object):
         self.save_file('login_page.htm', reponse_login.text, reponse_login.encoding)
         self.get_user_url(reponse_login.text)
         
-    def get_user_url(self, html_text): #打印用户的链接
+    def get_user_url(self, html_text): #获取用户链接
         soup = BeautifulSoup(html_text)
         user_url = []
         for a_tag in soup.find_all("a"):
@@ -94,9 +95,29 @@ class ZhihuInspect(object):
                 pass
         return user_url
     
-    def process_user_urls(self, urls):
-        for user_url in urls:
-            self.parse_user_page(user_url)
+    def get_question_url(self, html_text): #获取quesion链接
+        soup = BeautifulSoup(html_text)
+        question_url = []
+        for a_tag in soup.find_all("a"):
+            try:
+                if a_tag["href"].find("/question/") == 0:
+                    tmp_url = a_tag["href"]
+                    #把/question/31491363/answer/54700182 截取为 /question/31491363
+                    url_end = tmp_url.find("/", len("/question/")) #第二个参数为查找的启始下标
+                    if url_end > 0:
+                        tmp_url = tmp_url[:url_end]
+                    question_url.append(r"http://www.zhihu.com" + tmp_url)
+            except KeyError:
+                #html页面中 a标签下无href属性，不处理 
+                pass
+        return question_url
+    
+    def process_question_url(self, urls):
+        for question_url in urls:
+            text = self.get_page(question_url)
+            user_urls = self.get_user_url(text)
+            for user_url in user_urls:
+                self.parse_user_page(user_url)
     
     def parse_user_page(self, url):
         self.debug_print(DebugLevel.verbose, "parse " + url)
@@ -123,6 +144,12 @@ class ZhihuInspect(object):
         text = response.text
         self.save_file("first_page.htm", text, response.encoding)
         return text
+    
+    def get_page(self, url):
+        response = requests.get(self.first_url, headers = self.header)
+        #todo: 加一个延时，避免被服务器认为是攻击
+        text = response.text
+        return text
 
 class ZhihuUser(object):
     debug_level = DebugLevel.verbose
@@ -133,7 +160,6 @@ class ZhihuUser(object):
         self.name = name
         self.agree_cnt = agree_cnt
         self.thank_cnt = thank_cnt
-        pass
     
     def debug_print(self, level, log_str):
         if level.value >= self.debug_level.value:
@@ -147,8 +173,8 @@ class ZhihuUser(object):
 if __name__ == "__main__":
     z = ZhihuInspect()
     first_page = z.get_first_page()
-    user_urls = z.get_user_url(first_page)
-    z.process_user_urls(user_urls)
+    question_urls = z.get_question_url(first_page)
+    z.process_question_url(question_urls)
     z.print_all_user()
     
     print("ok\n")
