@@ -15,8 +15,7 @@ class DebugLevel(Enum):
     error = 3
     end = 4
 
-class ZhihuInspect(object):
-    header = {
+my_header = {
         'Connection': 'Keep-Alive',
         'Accept': 'text/html, application/xhtml+xml, */*',
         'Accept-Language': 'zh-CN,zh;q=0.8',
@@ -25,25 +24,27 @@ class ZhihuInspect(object):
         'Host': 'www.zhihu.com',
         'DNT': '1'
     }
-    base_url = r"http://www.zhihu.com/"
-    first_url = r"http://www.zhihu.com/explore"
-    email = r"xxxxx"
-    password = r"xxxxx"
-    debug_level = DebugLevel.end
-    users = []
+
+class ZhihuInspect(object):
     
     def __init__(self):
+        self.base_url = r"http://www.zhihu.com/"
+        self.first_url = r"http://www.zhihu.com/explore"
+        self.email = r"xxxxx"
+        self.password = r"xxxxx"
+        self.debug_level = DebugLevel.end
+        self.users = []
         pass
 
-    def save_file(self, path, str_content, encoding):
-        with codecs.open(path, 'w', encoding)  as fp:
-            fp.write(str_content)
-    
     def debug_print(self, level, log_str):
         if level.value >= self.debug_level.value:
             print(log_str)
         #todo: write log file.
     
+    def save_file(self, path, str_content, encoding):
+        with codecs.open(path, 'w', encoding)  as fp:
+            fp.write(str_content)
+            
     def print_all_user(self):
         print("user num: " + str(len(self.users)))
         for user in self.users:
@@ -60,7 +61,7 @@ class ZhihuInspect(object):
     
     def init_xsrf(self):
         """初始化，获取xsrf"""
-        response = requests.get(self.base_url, headers = self.header)
+        response = requests.get(self.base_url, headers = my_header)
         text = response.text
         self.save_file("pre_page.htm", text, response.encoding)
         soup = BeautifulSoup(text);
@@ -77,11 +78,10 @@ class ZhihuInspect(object):
             'email': self.email,
             '_xsrf':self.xsrf    
         }
-        reponse_login = requests.post(login_url, headers = self.header, data = post_dict)
+        reponse_login = requests.post(login_url, headers = my_headerr, data = post_dict)
         self.save_file('login_page.htm', reponse_login.text, reponse_login.encoding)
-        self.get_user_url(reponse_login.text)
         
-    def get_user_url(self, html_text): #获取用户链接
+    def get_user_url(self, html_text): #获取一个页面中的所有用户链接
         soup = BeautifulSoup(html_text)
         user_url = []
         for a_tag in soup.find_all("a"):
@@ -95,7 +95,7 @@ class ZhihuInspect(object):
                 pass
         return user_url
     
-    def get_question_url(self, html_text): #获取quesion链接
+    def get_question_url(self, html_text): #获取一个页面中的所有quesion链接
         soup = BeautifulSoup(html_text)
         question_url = []
         for a_tag in soup.find_all("a"):
@@ -117,11 +117,45 @@ class ZhihuInspect(object):
             text = self.get_page(question_url)
             user_urls = self.get_user_url(text)
             for user_url in user_urls:
-                self.parse_user_page(user_url)
+                user = ZhihuUser(user_url)
+                if user.is_valid():
+                    self.add_user(user)    
+            return #测试用，只处理第一个quesion url
+            
+    def get_first_page(self):
+        response = requests.get(self.first_url, headers = my_header)
+        text = response.text
+        self.save_file("first_page.htm", text, response.encoding)
+        return text
     
+    def get_page(self, url):
+        response = requests.get(self.first_url, headers = my_header)
+        #todo: 加一个延时，避免被服务器认为是攻击
+        text = response.text
+        return text
+
+class ZhihuUser(object):
+    
+        
+    def __init__(self, user_url):
+        self.debug_level = DebugLevel.verbose
+        self.user_url = user_url
+        self.valid = self.parse_user_page(user_url)
+    
+    def is_valid(self):
+        return self.valid
+    
+    def debug_print(self, level, log_str):
+        if level.value >= self.debug_level.value:
+            print(log_str)
+    
+    def save_file(self, path, str_content, encoding):
+        with codecs.open(path, 'w', encoding)  as fp:
+            fp.write(str_content)
+            
     def parse_user_page(self, url):
         self.debug_print(DebugLevel.verbose, "parse " + url)
-        response = requests.get(url, headers = self.header) #todo 有些页面发现返回200，但页面是空的, 或是首页
+        response = requests.get(url, headers = my_header) #todo 有些页面发现返回200，但页面是空的, 或是首页
         self.save_file("user_page.htm", response.text, response.encoding)
         self.first_user_page_is_save = True
         soup = BeautifulSoup(response.text)        
@@ -134,37 +168,14 @@ class ZhihuInspect(object):
             agree_cnt = agree_tag.contents[1].contents[0]
             thank_tag = soup.find("span", class_="zm-profile-header-user-thanks") 
             thank_cnt = thank_tag.contents[1].contents[0]
-            user = ZhihuUser(name, int(agree_cnt), int(thank_cnt))
-            self.add_user(user)
+            self.name = name
+            self.thank_cnt = int(thank_cnt)
+            self.agree_cnt = int(agree_cnt)
+            return True
         except AttributeError:
             self.debug_print(DebugLevel.warning, "fail to parse " + url)
+            return False
             
-    def get_first_page(self):
-        response = requests.get(self.first_url, headers = self.header)
-        text = response.text
-        self.save_file("first_page.htm", text, response.encoding)
-        return text
-    
-    def get_page(self, url):
-        response = requests.get(self.first_url, headers = self.header)
-        #todo: 加一个延时，避免被服务器认为是攻击
-        text = response.text
-        return text
-
-class ZhihuUser(object):
-    debug_level = DebugLevel.verbose
-        
-    def __init__(self, name, agree_cnt, thank_cnt):
-        self.debug_print(DebugLevel.verbose, "new user:" + name + " agree:" + 
-                         str(agree_cnt) + " thank:" + str(thank_cnt))
-        self.name = name
-        self.agree_cnt = agree_cnt
-        self.thank_cnt = thank_cnt
-    
-    def debug_print(self, level, log_str):
-        if level.value >= self.debug_level.value:
-            print(log_str)
-    
     def __str__(self):
         #print类的实例打印的字符串
         return "User " + self.name + " agree: " + str(self.agree_cnt) + ", " \
