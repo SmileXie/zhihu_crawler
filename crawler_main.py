@@ -78,7 +78,7 @@ class ZhihuInspect(object):
             'email': self.email,
             '_xsrf':self.xsrf    
         }
-        reponse_login = requests.post(login_url, headers = my_headerr, data = post_dict)
+        reponse_login = requests.post(login_url, headers = my_header, data = post_dict)
         self.save_file('login_page.htm', reponse_login.text, reponse_login.encoding)
         
     def get_user_url(self, html_text): #获取一个页面中的所有用户链接
@@ -120,7 +120,7 @@ class ZhihuInspect(object):
                 user = ZhihuUser(user_url)
                 if user.is_valid():
                     self.add_user(user)    
-            return #测试用，只处理第一个quesion url
+            return #todo: delete. 测试用，只处理第一个quesion url
             
     def get_first_page(self):
         response = requests.get(self.first_url, headers = my_header)
@@ -141,6 +141,8 @@ class ZhihuUser(object):
         self.debug_level = DebugLevel.verbose
         self.user_url = user_url
         self.valid = self.parse_user_page(user_url)
+        if self.valid:
+            self.parse_extra_info()
     
     def is_valid(self):
         return self.valid
@@ -159,7 +161,7 @@ class ZhihuUser(object):
         self.save_file("user_page.htm", response.text, response.encoding)
         self.first_user_page_is_save = True
         soup = BeautifulSoup(response.text)        
-        
+        self.soup = soup
         try:
             #class_即是查找class，因为class是保留字，bs框架做了转化
             name_tag = soup.find("span", class_="name")
@@ -175,11 +177,22 @@ class ZhihuUser(object):
         except AttributeError:
             self.debug_print(DebugLevel.warning, "fail to parse " + url)
             return False
-            
+    
+    def parse_extra_info(self):
+        try:
+            edu_tag = self.soup.find("span", class_="education item")
+            self.education = edu_tag["title"]
+        except TypeError:
+            #soup find未找到，edu_tag会为None，访问时会抛出TypeError
+            return
+        
     def __str__(self):
         #print类的实例打印的字符串
-        return "User " + self.name + " agree: " + str(self.agree_cnt) + ", " \
+        out_str = "User " + self.name + " agree: " + str(self.agree_cnt) + ", " \
             "thank: " + str(self.thank_cnt)
+        if hasattr(self, "education"):
+            out_str += " education: " + self.education
+        return out_str
     
 if __name__ == "__main__":
     z = ZhihuInspect()
