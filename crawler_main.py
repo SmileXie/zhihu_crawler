@@ -140,7 +140,7 @@ class ZhihuUser(object):
     def __init__(self, user_url):
         self.debug_level = DebugLevel.verbose
         self.user_url = user_url
-        self.valid = self.parse_user_page(user_url)
+        self.valid = self.parse_user_page()
         if self.valid:
             self.parse_extra_info()
     
@@ -155,9 +155,9 @@ class ZhihuUser(object):
         with codecs.open(path, 'w', encoding)  as fp:
             fp.write(str_content)
             
-    def parse_user_page(self, url):
-        self.debug_print(DebugLevel.verbose, "parse " + url)
-        response = requests.get(url, headers = my_header) #todo 有些页面发现返回200，但页面是空的, 或是首页
+    def parse_user_page(self):
+        self.debug_print(DebugLevel.verbose, "parse " + self.user_url)
+        response = requests.get(self.user_url, headers = my_header) #todo 有些页面发现返回200，但页面是空的, 或是首页
         self.save_file("user_page.htm", response.text, response.encoding)
         self.first_user_page_is_save = True
         soup = BeautifulSoup(response.text)        
@@ -175,13 +175,15 @@ class ZhihuUser(object):
             self.agree_cnt = int(agree_cnt)
             return True
         except AttributeError:
-            self.debug_print(DebugLevel.warning, "fail to parse " + url)
+            self.debug_print(DebugLevel.warning, "fail to parse " + self.user_url)
             return False
     
     def parse_extra_info(self):
         try:
             edu_tag = self.soup.find("span", class_="education item")
             self.education = edu_tag["title"]
+            edu_extra_tag = self.soup.find("span", class_="education-extra item")
+            self.education_extra = edu_extra_tag["title"]
         except TypeError:
             #soup find未找到，edu_tag会为None，访问时会抛出TypeError
             return
@@ -192,6 +194,8 @@ class ZhihuUser(object):
             "thank: " + str(self.thank_cnt)
         if hasattr(self, "education"):
             out_str += " education: " + self.education
+        if hasattr(self, "education_extra"):
+            out_str += " major: " + self.education_extra
         return out_str
     
 if __name__ == "__main__":
