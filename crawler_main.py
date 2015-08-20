@@ -179,14 +179,22 @@ class ZhihuUser(object):
             return False
     
     def parse_extra_info(self):
-        try:
-            edu_tag = self.soup.find("span", class_="education item")
-            self.education = edu_tag["title"]
-            edu_extra_tag = self.soup.find("span", class_="education-extra item")
-            self.education_extra = edu_extra_tag["title"]
-        except TypeError:
-            #soup find未找到，edu_tag会为None，访问时会抛出TypeError
-            return
+        edu_tag = self.soup.find("span", class_="education item")
+        if edu_tag is not None: 
+            if edu_tag.has_key("title"):
+                self.education = edu_tag["title"]
+            
+        edu_extra_tag = self.soup.find("span", class_="education-extra item")
+        if edu_extra_tag is not None: 
+            if edu_extra_tag.has_key("title"):
+                self.education_extra = edu_extra_tag["title"]
+            
+        employment_tag = self.soup.find("span", class_="employment item")
+        if employment_tag is not None: 
+            if employment_tag.has_key("title"):
+                self.employment = employment_tag["title"]
+            
+
         
     def __str__(self):
         #print类的实例打印的字符串
@@ -196,6 +204,8 @@ class ZhihuUser(object):
             out_str += " education: " + self.education
         if hasattr(self, "education_extra"):
             out_str += " major: " + self.education_extra
+        if hasattr(self, "employment"):
+            out_str += " employment: " + self.employment
         return out_str
     
 if __name__ == "__main__":
