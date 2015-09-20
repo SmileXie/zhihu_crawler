@@ -135,13 +135,15 @@ class ZhihuInspect(object):
         return text
 
 class ZhihuUser(object):
-    
+    extra_info_key = ("education item", "education-extra item", "employment item", \
+                      "location item", "position item");
         
     def __init__(self, user_url):
         self.debug_level = DebugLevel.verbose
         self.user_url = user_url
         self.valid = self.parse_user_page()
         if self.valid:
+            self.extra_info = {}
             self.parse_extra_info()
     
     def is_valid(self):
@@ -179,33 +181,21 @@ class ZhihuUser(object):
             return False
     
     def parse_extra_info(self):
-        edu_tag = self.soup.find("span", class_="education item")
-        if edu_tag is not None: 
-            if edu_tag.has_key("title"):
-                self.education = edu_tag["title"]
-            
-        edu_extra_tag = self.soup.find("span", class_="education-extra item")
-        if edu_extra_tag is not None: 
-            if edu_extra_tag.has_key("title"):
-                self.education_extra = edu_extra_tag["title"]
-            
-        employment_tag = self.soup.find("span", class_="employment item")
-        if employment_tag is not None: 
-            if employment_tag.has_key("title"):
-                self.employment = employment_tag["title"]
-            
-
+        #知乎上的格式类似以下形式：<span class="position item" title="流程设计">
+        for key_str in self.extra_info_key:
+            tag = self.soup.find("span", class_=key_str)
+            if tag is not None:
+                self.extra_info[key_str] = tag["title"]
+        
         
     def __str__(self):
         #print类的实例打印的字符串
         out_str = "User " + self.name + " agree: " + str(self.agree_cnt) + ", " \
             "thank: " + str(self.thank_cnt)
-        if hasattr(self, "education"):
-            out_str += " education: " + self.education
-        if hasattr(self, "education_extra"):
-            out_str += " major: " + self.education_extra
-        if hasattr(self, "employment"):
-            out_str += " employment: " + self.employment
+        for key_str in self.extra_info_key:
+            if key_str in self.extra_info:
+                out_str += " " + key_str + ": " + self.extra_info[key_str]
+
         return out_str
     
 if __name__ == "__main__":
