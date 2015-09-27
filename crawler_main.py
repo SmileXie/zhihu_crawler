@@ -172,6 +172,13 @@ class ZhihuUser(object):
             agree_cnt = agree_tag.contents[1].contents[0]
             thank_tag = soup.find("span", class_="zm-profile-header-user-thanks") 
             thank_cnt = thank_tag.contents[1].contents[0]
+            gender_tag = soup.find("span", class_="item gender")
+            #gender_tag.cont...nts[0]["class"]是一个list，list的每一个元素是字符串
+            gender_str = gender_tag.contents[0]["class"][1]
+            if gender_str.find("female") > 0:
+                self.gender_is_male = False
+            else:
+                self.gender_is_male = True
             self.name = name
             self.thank_cnt = int(thank_cnt)
             self.agree_cnt = int(agree_cnt)
@@ -191,7 +198,11 @@ class ZhihuUser(object):
     def __str__(self):
         #print类的实例打印的字符串
         out_str = "User " + self.name + " agree: " + str(self.agree_cnt) + ", " \
-            "thank: " + str(self.thank_cnt)
+            "thank: " + str(self.thank_cnt) 
+        if self.gender_is_male:
+            out_str += " male "
+        else:
+            out_str += " female "
         for key_str in self.extra_info_key:
             if key_str in self.extra_info:
                 out_str += " " + key_str + ": " + self.extra_info[key_str]
