@@ -6,6 +6,9 @@ Author: smilexie1113@gmail.com
 """
 import requests
 import codecs 
+import json
+import time
+
 from bs4 import BeautifulSoup
 from enum import Enum
 
@@ -24,6 +27,19 @@ my_header = {
         'Host': 'www.zhihu.com',
         'DNT': '1'
     }
+
+def obj_to_dict(obj):          
+    tmp_dict = {}
+    tmp_dict["name"] = obj.name
+    tmp_dict["url"] = obj.user_url
+    tmp_dict["thank_cnt"] = obj.thank_cnt
+    tmp_dict["agree_cnt"] = obj.agree_cnt
+    tmp_dict["is_male"] = obj.gender_is_male
+    for key_str in ZhihuUser.extra_info_key:
+        if key_str in obj.extra_info:
+            tmp_dict[key_str] = obj.extra_info[key_str]
+        
+    return tmp_dict
 
 class ZhihuInspect(object):
     
@@ -44,7 +60,12 @@ class ZhihuInspect(object):
     def save_file(self, path, str_content, encoding):
         with codecs.open(path, 'w', encoding)  as fp:
             fp.write(str_content)
-            
+    
+    def save_user(self, user):
+        with open("users_json.txt", "a") as fp:
+            json_str = json.dumps(user, default = obj_to_dict, ensure_ascii = False)
+            fp.write(json_str + "\r\n")
+    
     def print_all_user(self):
         print("user num: " + str(len(self.users)))
         for user in self.users:
@@ -53,11 +74,12 @@ class ZhihuInspect(object):
     def add_user(self, user):
         for user_node in self.users:
             if user_node.name == user.name:
-                user_node.agree_cnt = user.agree_cnt
-                user_node.thank_cnt = user.thank_cnt
                 break;        
         else:
-            self.users.append(user)           
+            self.users.append(user)
+            return True
+        
+        return False      
     
     def init_xsrf(self):
         """初始化，获取xsrf"""
@@ -83,13 +105,13 @@ class ZhihuInspect(object):
         
     def get_user_url(self, html_text): #获取一个页面中的所有用户链接
         soup = BeautifulSoup(html_text)
-        user_url = []
+        user_url = set()
         for a_tag in soup.find_all("a"):
             try:
                 if a_tag["href"].find("http://www.zhihu.com/people/") == 0:
-                    user_url.append(a_tag["href"])
+                    user_url.add(a_tag["href"])
                 elif a_tag["href"].find("/people/") == 0:
-                    user_url.append(r"http://www.zhihu.com" + a_tag["href"])
+                    user_url.add(r"http://www.zhihu.com" + a_tag["href"])
             except KeyError:
                 #html页面中 a标签下无href属性，不处理 
                 pass
@@ -97,7 +119,7 @@ class ZhihuInspect(object):
     
     def get_question_url(self, html_text): #获取一个页面中的所有quesion链接
         soup = BeautifulSoup(html_text)
-        question_url = []
+        question_url = set()
         for a_tag in soup.find_all("a"):
             try:
                 if a_tag["href"].find("/question/") == 0:
@@ -106,7 +128,7 @@ class ZhihuInspect(object):
                     url_end = tmp_url.find("/", len("/question/")) #第二个参数为查找的启始下标
                     if url_end > 0:
                         tmp_url = tmp_url[:url_end]
-                    question_url.append(r"http://www.zhihu.com" + tmp_url)
+                    question_url.add(r"http://www.zhihu.com" + tmp_url)
             except KeyError:
                 #html页面中 a标签下无href属性，不处理 
                 pass
@@ -117,10 +139,12 @@ class ZhihuInspect(object):
             text = self.get_page(question_url)
             user_urls = self.get_user_url(text)
             for user_url in user_urls:
+                time.sleep(0.5) #延迟0.5s 避免被智乎认为请求过于频繁
                 user = ZhihuUser(user_url)
                 if user.is_valid():
-                    self.add_user(user)    
-            return #todo: delete. 测试用，只处理第一个quesion url
+                    if self.add_user(user):
+                        self.save_user(user) 
+            #return #todo: delete. 测试用，只处理第一个quesion url
             
     def get_first_page(self):
         response = requests.get(self.first_url, headers = my_header)
@@ -129,8 +153,7 @@ class ZhihuInspect(object):
         return text
     
     def get_page(self, url):
-        response = requests.get(self.first_url, headers = my_header)
-        #todo: 加一个延时，避免被服务器认为是攻击
+        response = requests.get(url, headers = my_header)
         text = response.text
         return text
 
@@ -159,12 +182,12 @@ class ZhihuUser(object):
             
     def parse_user_page(self):
         self.debug_print(DebugLevel.verbose, "parse " + self.user_url)
-        response = requests.get(self.user_url, headers = my_header) #todo 有些页面发现返回200，但页面是空的, 或是首页
-        self.save_file("user_page.htm", response.text, response.encoding)
-        self.first_user_page_is_save = True
-        soup = BeautifulSoup(response.text)        
-        self.soup = soup
         try:
+            response = requests.get(self.user_url, headers = my_header)
+            self.save_file("user_page.htm", response.text, response.encoding)
+            self.first_user_page_is_save = True
+            soup = BeautifulSoup(response.text)        
+            self.soup = soup
             #class_即是查找class，因为class是保留字，bs框架做了转化
             name_tag = soup.find("span", class_="name")
             name = name_tag.contents[0]
@@ -185,6 +208,12 @@ class ZhihuUser(object):
             return True
         except AttributeError:
             self.debug_print(DebugLevel.warning, "fail to parse " + self.user_url)
+            return False
+        except TimeoutError:
+            self.debug_print(DebugLevel.warning, "get " + self.user_url + " timeout.")
+            return False
+        except ConnectionError: 
+            self.debug_print(DebugLevel.warning, "connect " + self.user_url + " timeout.")
             return False
     
     def parse_extra_info(self):
