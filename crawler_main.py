@@ -38,6 +38,8 @@ def obj_to_dict(obj):
     for key_str in ZhihuUser.extra_info_key:
         if key_str in obj.extra_info:
             tmp_dict[key_str] = obj.extra_info[key_str]
+        else:
+            tmp_dict[key_str] = ""
         
     return tmp_dict
 
@@ -48,7 +50,7 @@ class ZhihuInspect(object):
         self.first_url = r"http://www.zhihu.com/explore"
         self.email = r"xxxxx"
         self.password = r"xxxxx"
-        self.debug_level = DebugLevel.end
+        self.debug_level = DebugLevel.warning
         self.users = []
         pass
 
@@ -63,7 +65,7 @@ class ZhihuInspect(object):
     
     def save_user(self, user):
         with open("users_json.txt", "a") as fp:
-            json_str = json.dumps(user, default = obj_to_dict, ensure_ascii = False)
+            json_str = json.dumps(user, default = obj_to_dict, ensure_ascii = False, sort_keys = True)
             fp.write(json_str + "\r\n")
     
     def print_all_user(self):
@@ -103,9 +105,12 @@ class ZhihuInspect(object):
         reponse_login = requests.post(login_url, headers = my_header, data = post_dict)
         self.save_file('login_page.htm', reponse_login.text, reponse_login.encoding)
         
-    def get_user_url(self, html_text): #获取一个页面中的所有用户链接
-        soup = BeautifulSoup(html_text)
+    def get_user_url(self, url):
+        """获一个页面中的所有用户链接"""
         user_url = set()
+        html_text = self.get_page(url)  
+        soup = BeautifulSoup(html_text)
+        
         for a_tag in soup.find_all("a"):
             try:
                 if a_tag["href"].find("http://www.zhihu.com/people/") == 0:
@@ -117,7 +122,9 @@ class ZhihuInspect(object):
                 pass
         return user_url
     
-    def get_question_url(self, html_text): #获取一个页面中的所有quesion链接
+    def get_question_url(self, url):
+        """获取一个页面中的所有quesion链接"""
+        html_text = self.get_page(url)
         soup = BeautifulSoup(html_text)
         question_url = set()
         for a_tag in soup.find_all("a"):
@@ -136,8 +143,7 @@ class ZhihuInspect(object):
     
     def process_question_url(self, urls):
         for question_url in urls:
-            text = self.get_page(question_url)
-            user_urls = self.get_user_url(text)
+            user_urls = self.get_user_url(question_url)
             for user_url in user_urls:
                 time.sleep(0.5) #延迟0.5s 避免被智乎认为请求过于频繁
                 user = ZhihuUser(user_url)
@@ -146,16 +152,15 @@ class ZhihuInspect(object):
                         self.save_user(user) 
             #return #todo: delete. 测试用，只处理第一个quesion url
             
-    def get_first_page(self):
-        response = requests.get(self.first_url, headers = my_header)
-        text = response.text
-        self.save_file("first_page.htm", text, response.encoding)
-        return text
-    
     def get_page(self, url):
-        response = requests.get(url, headers = my_header)
-        text = response.text
-        return text
+        try:
+            response = requests.get(url, headers = my_header)
+            text = response.text
+            return text
+        except Exception as e:
+            self.debug_print(DebugLevel.warning, "fail to get " \
+                             + url + " error info: " + str(e))
+            return ""
 
 class ZhihuUser(object):
     extra_info_key = ("education item", "education-extra item", "employment item", \
@@ -205,16 +210,22 @@ class ZhihuUser(object):
             self.name = name
             self.thank_cnt = int(thank_cnt)
             self.agree_cnt = int(agree_cnt)
-            return True
+            is_ok = True
         except AttributeError:
             self.debug_print(DebugLevel.warning, "fail to parse " + self.user_url)
-            return False
+            is_ok = False
         except TimeoutError:
             self.debug_print(DebugLevel.warning, "get " + self.user_url + " timeout.")
-            return False
+            is_ok = False
         except ConnectionError: 
             self.debug_print(DebugLevel.warning, "connect " + self.user_url + " timeout.")
-            return False
+            is_ok = False
+        except Exception as e:
+            self.debug_print(DebugLevel.warning, "some other exception raised by parsing " \
+                             + self.user_url + "error info: " + str(e))
+            is_ok = False
+        finally:
+            return is_ok
     
     def parse_extra_info(self):
         #知乎上的格式类似以下形式：<span class="position item" title="流程设计">
@@ -240,8 +251,7 @@ class ZhihuUser(object):
     
 if __name__ == "__main__":
     z = ZhihuInspect()
-    first_page = z.get_first_page()
-    question_urls = z.get_question_url(first_page)
+    question_urls = z.get_question_url(z.first_url)
     z.process_question_url(question_urls)
     z.print_all_user()
     
