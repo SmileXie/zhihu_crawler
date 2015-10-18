@@ -52,6 +52,7 @@ class ZhihuInspect(object):
         self.password = r"xxxxx"
         self.debug_level = DebugLevel.warning
         self.users = []
+        self.visited_url = set() #set 查找元素的时间复杂度是O(1)
         pass
 
     def debug_print(self, level, log_str):
@@ -74,15 +75,13 @@ class ZhihuInspect(object):
             print(user)
     
     def add_user(self, user):
-        for user_node in self.users:
-            if user_node.name == user.name:
-                break;        
+        if user.get_url() in self.visited_url: #set 查找元素的时间复杂度是O(1)
+            return False     
         else:
+            self.visited_url.add(user.get_url())
             self.users.append(user)
             return True
-        
-        return False      
-    
+
     def init_xsrf(self):
         """初始化，获取xsrf"""
         response = requests.get(self.base_url, headers = my_header)
@@ -176,6 +175,9 @@ class ZhihuUser(object):
     
     def is_valid(self):
         return self.valid
+    
+    def get_url(self):
+        return self.user_url
     
     def debug_print(self, level, log_str):
         if level.value >= self.debug_level.value:
