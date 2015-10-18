@@ -189,7 +189,7 @@ class ZhihuUser(object):
         self.debug_print(DebugLevel.verbose, "parse " + self.user_url)
         try:
             response = requests.get(self.user_url, headers = my_header)
-            self.save_file("user_page.htm", response.text, response.encoding)
+            #self.save_file("user_page.htm", response.text, response.encoding)
             self.first_user_page_is_save = True
             soup = BeautifulSoup(response.text)        
             self.soup = soup
@@ -248,13 +248,14 @@ class ZhihuUser(object):
                 out_str += " " + key_str + ": " + self.extra_info[key_str]
 
         return out_str
-    
-if __name__ == "__main__":
+
+def main():
     z = ZhihuInspect()
     question_urls = z.get_question_url(z.first_url)
     z.process_question_url(question_urls)
-    z.print_all_user()
-    
+    z.print_all_user()    
     print("ok\n")
-    
+
+if __name__ == "__main__":    
+    main()
     
