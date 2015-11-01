@@ -28,7 +28,22 @@ my_header = {
         'DNT': '1'
     }
 
-def obj_to_dict(obj):          
+topic_next_header = {
+        'Connection': 'Keep-Alive',
+        'Accept': '*/*',
+        'Accept-Encoding': 'gzip, deflate',
+        'Accept-Language': 'zh-CN,zh;q=0.8',
+        'Origin': 'http://www.zhihu.com',
+        'Referer': 'http://www.zhihu.com/topics',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko',
+        'Host': 'www.zhihu.com',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'Content-Length': '129'
+    }
+
+def obj_to_dict(obj):
+    """把ZhihuUser转成dict数据，用于ZhihuInspect。save_user中的json dump"""   
     tmp_dict = {}
     tmp_dict["name"] = obj.name
     tmp_dict["url"] = obj.user_url
@@ -47,7 +62,8 @@ class ZhihuInspect(object):
     
     def __init__(self):
         self.base_url = r"http://www.zhihu.com/"
-        self.first_url = r"http://www.zhihu.com/explore"
+        self.topic_url = r"http://www.zhihu.com/topics"
+        self.first_url = self.topic_url
         self.email = r"xxxxx"
         self.password = r"xxxxx"
         self.debug_level = DebugLevel.warning
@@ -103,7 +119,22 @@ class ZhihuInspect(object):
         }
         reponse_login = requests.post(login_url, headers = my_header, data = post_dict)
         self.save_file('login_page.htm', reponse_login.text, reponse_login.encoding)
-        
+    
+    def get_topic_full(self):
+        """获取http://www.zhihu.com/topics页面之下，'更多'的部分"""
+        response = requests.get(self.topic_url, headers = my_header)
+        text = response.text
+        self.save_file("topics.htm", text, response.encoding)        
+        #以下获取网页中"更多"的部分
+        post_dict = {
+            'method': 'next',
+            'params': r'{"topic_id":253,"offset":20,"hash_id":""}', 
+            '_xsrf':self.xsrf    
+        }        
+        response = requests.post("http://www.zhihu.com/node/TopicsPlazzaListV2", headers = my_header, data = post_dict)
+        text = response.text
+        next_topics = json.loads(text)
+
     def get_user_url(self, url):
         """获一个页面中的所有用户链接"""
         user_url = set()
@@ -160,7 +191,17 @@ class ZhihuInspect(object):
             self.debug_print(DebugLevel.warning, "fail to get " \
                              + url + " error info: " + str(e))
             return ""
-
+    
+    def get_and_save_page(self, url, path):
+        try:
+            response = requests.get(url, headers = my_header)
+            self.save_file(path, response.text, response.encoding)
+            return
+        except Exception as e:
+            self.debug_print(DebugLevel.warning, "fail to get " \
+                             + url + " error info: " + str(e))
+            return
+    
 class ZhihuUser(object):
     extra_info_key = ("education item", "education-extra item", "employment item", \
                       "location item", "position item");
@@ -253,9 +294,9 @@ class ZhihuUser(object):
 
 def main():
     z = ZhihuInspect()
-    question_urls = z.get_question_url(z.first_url)
-    z.process_question_url(question_urls)
-    z.print_all_user()    
+    z.init_xsrf()
+    z.get_topic_full()
+
     print("ok\n")
 
 if __name__ == "__main__":    
