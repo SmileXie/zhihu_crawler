@@ -62,11 +62,11 @@ class ZhihuInspect(object):
     
     def __init__(self):
         self.base_url = r"http://www.zhihu.com/"
-        self.topic_url = r"http://www.zhihu.com/topics"
-        self.first_url = self.topic_url
+        self.topic_square_url = r"http://www.zhihu.com/topics"
+        self.first_url = self.topic_square_url
         self.email = r"xxxxx"
         self.password = r"xxxxx"
-        self.debug_level = DebugLevel.warning
+        self.debug_level = DebugLevel.verbose
         self.users = []
         self.visited_url = set() #set 查找元素的时间复杂度是O(1)
         pass
@@ -103,7 +103,7 @@ class ZhihuInspect(object):
         response = requests.get(self.base_url, headers = my_header)
         text = response.text
         self.save_file("pre_page.htm", text, response.encoding)
-        soup = BeautifulSoup(text);
+        soup = BeautifulSoup(text, "lxml")
         input_tag = soup.find("input", {"name": "_xsrf"})
         xsrf = input_tag["value"]
         self.xsrf = xsrf
@@ -119,27 +119,62 @@ class ZhihuInspect(object):
         }
         reponse_login = requests.post(login_url, headers = my_header, data = post_dict)
         self.save_file('login_page.htm', reponse_login.text, reponse_login.encoding)
-    
-    def get_topic_full(self):
-        """获取http://www.zhihu.com/topics页面之下，'更多'的部分"""
-        response = requests.get(self.topic_url, headers = my_header)
-        text = response.text
-        self.save_file("topics.htm", text, response.encoding)        
-        #以下获取网页中"更多"的部分
-        post_dict = {
-            'method': 'next',
-            'params': r'{"topic_id":253,"offset":20,"hash_id":""}', 
-            '_xsrf':self.xsrf    
-        }        
-        response = requests.post("http://www.zhihu.com/node/TopicsPlazzaListV2", headers = my_header, data = post_dict)
-        text = response.text
-        next_topics = json.loads(text)
 
+    def traverse_topic(self):
+        """遍历http://www.zhihu.com/topics话题广场页面顶端的标签，解析各话题"""
+        response = requests.get(self.topic_square_url, headers = my_header)
+        text = response.text
+        self.save_file("topics.htm", text, response.encoding)
+        soup = BeautifulSoup(text, "lxml")
+        for li_tag in soup.find_all("li"):
+            try:
+                id = int(li_tag["data-id"])
+                top_topic_name = li_tag.contents[0]["href"]
+                self.get_topic_square_full(id, top_topic_name)
+            except KeyError:
+                #html页面中 li标签下无data-id属性，不处理 
+                pass
+        
+    def get_topic_square_full(self, id, top_topic_name):
+        """获取http://www.zhihu.com/topics话题广场每个标签之下，'更多'的部分"""
+        next_time = 0
+        self.debug_print(DebugLevel.verbose, "parse top topic %d. %s.\r\n" % (id, top_topic_name));
+        
+        #以下获取网页中"更多"的部分
+        while True:
+            post_dict = {
+                'method': 'next',
+                'params': r'{"topic_id":%d,"offset":%d,"hash_id":""}' % (id, next_time * 20), 
+                '_xsrf': self.xsrf    
+            }
+            response = requests.post("http://www.zhihu.com/node/TopicsPlazzaListV2", headers = my_header, data = post_dict)
+            if response.status_code != 200:
+                break
+            text = response.text
+            self.save_file("topic_next_%d.html" % next_time, text, response.encoding)   
+            next_topics = json.loads(text)
+            if len(next_topics["msg"]) == 0:#msg长度为0时,表示已经请求不到数据,到达页面的底端
+                break;
+                
+            #next_topics["msg"][0] 包含了新请求到的topic xml信息
+            soup = BeautifulSoup(next_topics["msg"][0], "lxml")
+            for a_tag in soup.find_all("a"):
+                try:
+                    if a_tag["href"].find("/topic/") == 0:
+                        topic_url = r"http://www.zhihu.com" + a_tag["href"]
+                        ZhihuTopic(topic_url)
+                        time.sleep(0.5)
+                except KeyError:
+                    pass
+            
+            time.sleep(0.5)
+            next_time += 1
+        
     def get_user_url(self, url):
         """获一个页面中的所有用户链接"""
         user_url = set()
         html_text = self.get_page(url)  
-        soup = BeautifulSoup(html_text)
+        soup = BeautifulSoup(html_text, "lxml")
         
         for a_tag in soup.find_all("a"):
             try:
@@ -155,7 +190,7 @@ class ZhihuInspect(object):
     def get_question_url(self, url):
         """获取一个页面中的所有quesion链接"""
         html_text = self.get_page(url)
-        soup = BeautifulSoup(html_text)
+        soup = BeautifulSoup(html_text, "lxml")
         question_url = set()
         for a_tag in soup.find_all("a"):
             try:
@@ -201,7 +236,37 @@ class ZhihuInspect(object):
             self.debug_print(DebugLevel.warning, "fail to get " \
                              + url + " error info: " + str(e))
             return
-    
+
+
+class ZhihuTopic(object):
+    def __init__(self, url):
+        self.debug_level = DebugLevel.verbose
+        self.url = url
+        self.valid = self.parse_topic()
+        if self.valid:
+            self.debug_print(DebugLevel.verbose, "parse " + url + ". topic " + self.name)
+        pass
+
+    def debug_print(self, level, log_str):
+        if level.value >= self.debug_level.value:
+            print(log_str)
+        #todo: write log file.
+
+    def parse_topic(self):
+        try:
+            response = requests.get(self.url, headers = my_header)
+            soup = BeautifulSoup(response.text, "lxml")
+            self.soup = soup
+            topic_info_tag = soup.find("h1", class_="zm-editable-content")
+            self.name = topic_info_tag.contents[0]
+            is_ok = True
+        except Exception as err:
+            self.debug_print(DebugLevel.warning, "exception raised by parsing " \
+                             + self.url + " error info: " + err)
+            is_ok = False
+        finally:
+            return is_ok
+                             
 class ZhihuUser(object):
     extra_info_key = ("education item", "education-extra item", "employment item", \
                       "location item", "position item");
@@ -234,7 +299,7 @@ class ZhihuUser(object):
             response = requests.get(self.user_url, headers = my_header)
             #self.save_file("user_page.htm", response.text, response.encoding)
             self.first_user_page_is_save = True
-            soup = BeautifulSoup(response.text)        
+            soup = BeautifulSoup(response.text, "lxml")        
             self.soup = soup
             #class_即是查找class，因为class是保留字，bs框架做了转化
             name_tag = soup.find("span", class_="name")
@@ -295,7 +360,7 @@ class ZhihuUser(object):
 def main():
     z = ZhihuInspect()
     z.init_xsrf()
-    z.get_topic_full()
+    z.traverse_topic()
 
     print("ok\n")
 
