@@ -28,21 +28,7 @@ my_header = {
         'DNT': '1'
     }
 
-topic_next_header = {
-        'Connection': 'Keep-Alive',
-        'Accept': '*/*',
-        'Accept-Encoding': 'gzip, deflate',
-        'Accept-Language': 'zh-CN,zh;q=0.8',
-        'Origin': 'http://www.zhihu.com',
-        'Referer': 'http://www.zhihu.com/topics',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko',
-        'Host': 'www.zhihu.com',
-        'X-Requested-With': 'XMLHttpRequest',
-        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        'Content-Length': '129'
-    }
-
-def obj_to_dict(obj):
+def user_obj_to_dict(obj):
     """把ZhihuUser转成dict数据，用于ZhihuInspect。save_user中的json dump"""   
     tmp_dict = {}
     tmp_dict["name"] = obj.name
@@ -58,17 +44,27 @@ def obj_to_dict(obj):
         
     return tmp_dict
 
+def topic_obj_to_dict(obj):
+    """把ZhihuTopic转成dict数据，用于ZhihuInspect。save_topic中的json dump"""   
+    tmp_dict = {}
+    tmp_dict["name"] = obj.name
+    tmp_dict["url"] = obj.url
+    return tmp_dict
+    
 class ZhihuInspect(object):
     
     def __init__(self):
-        self.base_url = r"http://www.zhihu.com/"
+        self.base_url = r"http://www.zhihu.com"
         self.topic_square_url = r"http://www.zhihu.com/topics"
+        self.root_topic = r"http://www.zhihu.com/topic/19776749" #知乎的根话题
         self.first_url = self.topic_square_url
         self.email = r"xxxxx"
         self.password = r"xxxxx"
         self.debug_level = DebugLevel.verbose
         self.users = []
-        self.visited_url = set() #set 查找元素的时间复杂度是O(1)
+        self.topics = []
+        self.visited_user_url = set() #set 查找元素的时间复杂度是O(1)
+        self.visited_topic_url = set() #set 查找元素的时间复杂度是O(1)
         pass
 
     def debug_print(self, level, log_str):
@@ -79,25 +75,38 @@ class ZhihuInspect(object):
     def save_file(self, path, str_content, encoding):
         with codecs.open(path, 'w', encoding)  as fp:
             fp.write(str_content)
-    
-    def save_user(self, user):
-        with open("users_json.txt", "a") as fp:
-            json_str = json.dumps(user, default = obj_to_dict, ensure_ascii = False, sort_keys = True)
-            fp.write(json_str + "\r\n")
-    
+        
     def print_all_user(self):
         print("user num: " + str(len(self.users)))
         for user in self.users:
             print(user)
+            
+    def save_user(self, user):
+        with open("users_json.txt", "a") as fp:
+            json_str = json.dumps(user, default = user_obj_to_dict, ensure_ascii = False, sort_keys = True)
+            fp.write(json_str + "\n")
     
     def add_user(self, user):
-        if user.get_url() in self.visited_url: #set 查找元素的时间复杂度是O(1)
+        if user.get_url() in self.visited_user_url: #set 查找元素的时间复杂度是O(1)
             return False     
         else:
-            self.visited_url.add(user.get_url())
+            self.visited_user_url.add(user.get_url())
             self.users.append(user)
             return True
 
+    def save_topic(self, topic):
+        with open("topic_json.txt", "a") as fp:
+            json_str = json.dumps(topic, default = topic_obj_to_dict, ensure_ascii = False, sort_keys = True)
+            fp.write(json_str + "\n")
+    
+    def add_topic(self, topic):
+        if topic.get_url() in self.visited_topic_url: #set 查找元素的时间复杂度是O(1)
+            return False     
+        else:
+            self.visited_topic_url.add(topic.get_url())
+            self.topics.append(topic)
+            return True
+            
     def init_xsrf(self):
         """初始化，获取xsrf"""
         response = requests.get(self.base_url, headers = my_header)
@@ -110,7 +119,7 @@ class ZhihuInspect(object):
         
     def get_login_page(self):
         """获取登录后的界面，需要先运行init_xsrf"""
-        login_url = self.base_url + r"login"
+        login_url = self.base_url + r"/login"
         post_dict = {
             'rememberme': 'y',
             'password': self.password,
@@ -120,56 +129,20 @@ class ZhihuInspect(object):
         reponse_login = requests.post(login_url, headers = my_header, data = post_dict)
         self.save_file('login_page.htm', reponse_login.text, reponse_login.encoding)
 
-    def traverse_topic(self):
-        """遍历http://www.zhihu.com/topics话题广场页面顶端的标签，解析各话题"""
-        response = requests.get(self.topic_square_url, headers = my_header)
+    def traverse_topic(self, parent_topic):
+        """遍历父话题，解析各子话题"""
+        response = requests.get(parent_topic, headers = my_header)
         text = response.text
-        self.save_file("topics.htm", text, response.encoding)
+        self.save_file("root_topics.htm", text, response.encoding)
         soup = BeautifulSoup(text, "lxml")
-        for li_tag in soup.find_all("li"):
-            try:
-                id = int(li_tag["data-id"])
-                top_topic_name = li_tag.contents[0]["href"]
-                self.get_topic_square_full(id, top_topic_name)
-            except KeyError:
-                #html页面中 li标签下无data-id属性，不处理 
-                pass
-        
-    def get_topic_square_full(self, id, top_topic_name):
-        """获取http://www.zhihu.com/topics话题广场每个标签之下，'更多'的部分"""
-        next_time = 0
-        self.debug_print(DebugLevel.verbose, "parse top topic %d. %s.\r\n" % (id, top_topic_name));
-        
-        #以下获取网页中"更多"的部分
-        while True:
-            post_dict = {
-                'method': 'next',
-                'params': r'{"topic_id":%d,"offset":%d,"hash_id":""}' % (id, next_time * 20), 
-                '_xsrf': self.xsrf    
-            }
-            response = requests.post("http://www.zhihu.com/node/TopicsPlazzaListV2", headers = my_header, data = post_dict)
-            if response.status_code != 200:
-                break
-            text = response.text
-            self.save_file("topic_next_%d.html" % next_time, text, response.encoding)   
-            next_topics = json.loads(text)
-            if len(next_topics["msg"]) == 0:#msg长度为0时,表示已经请求不到数据,到达页面的底端
-                break;
-                
-            #next_topics["msg"][0] 包含了新请求到的topic xml信息
-            soup = BeautifulSoup(next_topics["msg"][0], "lxml")
-            for a_tag in soup.find_all("a"):
-                try:
-                    if a_tag["href"].find("/topic/") == 0:
-                        topic_url = r"http://www.zhihu.com" + a_tag["href"]
-                        ZhihuTopic(topic_url)
-                        time.sleep(0.5)
-                except KeyError:
-                    pass
-            
-            time.sleep(0.5)
-            next_time += 1
-        
+        for a_tag in soup.find_all("a", class_="zm-item-tag"):
+            if a_tag["href"].find("/topic/") == 0:
+                child_topic_url = self.base_url + a_tag["href"]
+                topic = ZhihuTopic(child_topic_url)
+                if topic.is_valid():
+                    if self.add_topic(topic):
+                        self.save_topic(topic) 
+                    
     def get_user_url(self, url):
         """获一个页面中的所有用户链接"""
         user_url = set()
@@ -252,7 +225,14 @@ class ZhihuTopic(object):
             print(log_str)
         #todo: write log file.
 
+    def is_valid(self):
+        return self.valid
+
+    def get_url(self):
+        return self.url
+        
     def parse_topic(self):
+        is_ok = False
         try:
             response = requests.get(self.url, headers = my_header)
             soup = BeautifulSoup(response.text, "lxml")
@@ -262,8 +242,7 @@ class ZhihuTopic(object):
             is_ok = True
         except Exception as err:
             self.debug_print(DebugLevel.warning, "exception raised by parsing " \
-                             + self.url + " error info: " + err)
-            is_ok = False
+                             + self.url + " error info: " + err)            
         finally:
             return is_ok
                              
@@ -360,7 +339,7 @@ class ZhihuUser(object):
 def main():
     z = ZhihuInspect()
     z.init_xsrf()
-    z.traverse_topic()
+    z.traverse_topic(z.root_topic)
 
     print("ok\n")
 
