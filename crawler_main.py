@@ -8,7 +8,7 @@ import requests
 import codecs 
 import json
 import time
-
+from collections import deque
 from bs4 import BeautifulSoup
 from enum import Enum
 
@@ -66,7 +66,10 @@ class ZhihuInspect(object):
         self.visited_user_url = set() #set 查找元素的时间复杂度是O(1)
         self.visited_topic_url = set() #set 查找元素的时间复杂度是O(1)
         pass
-
+    
+    def do_crawler(self):
+        self.traverse_topic()
+    
     def debug_print(self, level, log_str):
         if level.value >= self.debug_level.value:
             print(log_str)
@@ -99,20 +102,12 @@ class ZhihuInspect(object):
             json_str = json.dumps(topic, default = topic_obj_to_dict, ensure_ascii = False, sort_keys = True)
             fp.write(json_str + "\n")
     
-    def add_topic(self, topic):
-        if topic.get_url() in self.visited_topic_url: #set 查找元素的时间复杂度是O(1)
-            return False     
-        else:
-            self.visited_topic_url.add(topic.get_url())
-            self.topics.append(topic)
-            return True
-            
     def init_xsrf(self):
         """初始化，获取xsrf"""
         response = requests.get(self.base_url, headers = my_header)
         text = response.text
         self.save_file("pre_page.htm", text, response.encoding)
-        soup = BeautifulSoup(text, "lxml")
+        soup = BeautifulSoup(text)
         input_tag = soup.find("input", {"name": "_xsrf"})
         xsrf = input_tag["value"]
         self.xsrf = xsrf
@@ -129,25 +124,33 @@ class ZhihuInspect(object):
         reponse_login = requests.post(login_url, headers = my_header, data = post_dict)
         self.save_file('login_page.htm', reponse_login.text, reponse_login.encoding)
 
-    def traverse_topic(self, parent_topic):
-        """遍历父话题，解析各子话题"""
-        response = requests.get(parent_topic, headers = my_header)
-        text = response.text
-        self.save_file("root_topics.htm", text, response.encoding)
-        soup = BeautifulSoup(text, "lxml")
-        for a_tag in soup.find_all("a", class_="zm-item-tag"):
-            if a_tag["href"].find("/topic/") == 0:
-                child_topic_url = self.base_url + a_tag["href"]
-                topic = ZhihuTopic(child_topic_url)
-                if topic.is_valid():
-                    if self.add_topic(topic):
-                        self.save_topic(topic) 
+    def traverse_topic(self):
+        """遍历话题，解析各子话题"""
+        help_q = deque() #广度优先搜索的辅助队列
+        
+        topic = ZhihuTopic(self.root_topic)
+        if topic.is_valid():
+            self.visited_topic_url.add(topic.get_url())
+            self.topics.append(topic)
+            self.save_topic(topic) 
+            help_q.append(topic)
+        
+        while len(help_q) != 0:
+            tmp_topic = help_q.popleft()
+            for topic_url in tmp_topic.get_related_topic():
+                if topic_url not in self.visited_topic_url:
+                    new_topic = ZhihuTopic(topic_url)
+                    if new_topic.is_valid():
+                        self.visited_topic_url.add(new_topic.get_url())
+                        self.topics.append(new_topic)
+                        self.save_topic(new_topic) 
+                        help_q.append(new_topic)
                     
     def get_user_url(self, url):
         """获一个页面中的所有用户链接"""
         user_url = set()
         html_text = self.get_page(url)  
-        soup = BeautifulSoup(html_text, "lxml")
+        soup = BeautifulSoup(html_text)
         
         for a_tag in soup.find_all("a"):
             try:
@@ -163,7 +166,7 @@ class ZhihuInspect(object):
     def get_question_url(self, url):
         """获取一个页面中的所有quesion链接"""
         html_text = self.get_page(url)
-        soup = BeautifulSoup(html_text, "lxml")
+        soup = BeautifulSoup(html_text)
         question_url = set()
         for a_tag in soup.find_all("a"):
             try:
@@ -213,10 +216,13 @@ class ZhihuInspect(object):
 
 class ZhihuTopic(object):
     def __init__(self, url):
+        self.base_url = r"http://www.zhihu.com"
         self.debug_level = DebugLevel.verbose
         self.url = url
+        self.related_topic_urls = []
         self.valid = self.parse_topic()
         if self.valid:
+            self.parse_related_topic()
             self.debug_print(DebugLevel.verbose, "parse " + url + ". topic " + self.name)
         pass
 
@@ -230,12 +236,15 @@ class ZhihuTopic(object):
 
     def get_url(self):
         return self.url
-        
+    
+    def get_related_topic(self):
+        return self.related_topic_urls
+       
     def parse_topic(self):
         is_ok = False
         try:
             response = requests.get(self.url, headers = my_header)
-            soup = BeautifulSoup(response.text, "lxml")
+            soup = BeautifulSoup(response.text)
             self.soup = soup
             topic_info_tag = soup.find("h1", class_="zm-editable-content")
             self.name = topic_info_tag.contents[0]
@@ -245,7 +254,14 @@ class ZhihuTopic(object):
                              + self.url + " error info: " + err)            
         finally:
             return is_ok
-                             
+    
+    def parse_related_topic(self):
+        """解析父话题或子话题"""
+        for a_tag in self.soup.find_all("a", class_="zm-item-tag"):
+            if a_tag["href"].find("/topic/") == 0:
+                topic_url = self.base_url + a_tag["href"]
+                self.related_topic_urls.append(topic_url)
+                           
 class ZhihuUser(object):
     extra_info_key = ("education item", "education-extra item", "employment item", \
                       "location item", "position item");
@@ -278,7 +294,7 @@ class ZhihuUser(object):
             response = requests.get(self.user_url, headers = my_header)
             #self.save_file("user_page.htm", response.text, response.encoding)
             self.first_user_page_is_save = True
-            soup = BeautifulSoup(response.text, "lxml")        
+            soup = BeautifulSoup(response.text)        
             self.soup = soup
             #class_即是查找class，因为class是保留字，bs框架做了转化
             name_tag = soup.find("span", class_="name")
@@ -339,7 +355,7 @@ class ZhihuUser(object):
 def main():
     z = ZhihuInspect()
     z.init_xsrf()
-    z.traverse_topic(z.root_topic)
+    z.do_crawler()
 
     print("ok\n")
 
