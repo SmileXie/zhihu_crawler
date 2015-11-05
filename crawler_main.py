@@ -220,10 +220,13 @@ class ZhihuTopic(object):
         self.debug_level = DebugLevel.verbose
         self.url = url
         self.related_topic_urls = []
+        self.top_answer_urls = []
         self.valid = self.parse_topic()
         if self.valid:
             self.parse_related_topic()
-            self.debug_print(DebugLevel.verbose, "parse " + url + ". topic " + self.name)
+            self.__parse_top_answer()
+            self.debug_print(DebugLevel.verbose, "get topic " + str(len(self.top_answer_urls)) + "answers") 
+            self.debug_print(DebugLevel.verbose, "parse " + url + ". topic " + self.name + " OK!")
         pass
 
     def debug_print(self, level, log_str):
@@ -261,7 +264,52 @@ class ZhihuTopic(object):
             if a_tag["href"].find("/topic/") == 0:
                 topic_url = self.base_url + a_tag["href"]
                 self.related_topic_urls.append(topic_url)
-                           
+
+    def __parse_top_answer_one_page(self, page):
+        """解析一个精华回答页面，返回值:是否还有下一页"""
+
+        self.debug_print(DebugLevel.verbose, "paser top answer of topic " + self.url + " page" \
+                        + str(page))
+                             
+        if page == 1:
+            #第一页无需下载页面，直接用self.soup就好
+            soup = self.soup
+        else:
+            page_url = self.url + r"?page=" + str(page) #指定页码
+            try:
+                response = requests.get(page_url, headers = my_header)
+                soup = BeautifulSoup(response.text)
+            except:
+                self.debug_print(DebugLevel.warning, "fail to get page" \
+                             + page_url)  
+                return False
+
+        #搜索question的url
+        for tag in soup.find_all("div", class_="zm-item-rich-text js-collapse-body"):
+            try:
+                question_url = self.base_url + tag["data-entry-url"]
+                self.top_answer_urls.append(question_url)
+            except:
+                self.debug_print(DebugLevel.warning, "fail to get question url in " \
+                             + self.url + " page" + str(page))        
+                continue
+
+        #如果有下一页的链接
+        for tag in soup.find_all("a"):
+            if tag.contents[0] == "下一页" :
+                return True
+
+        return False
+        
+    def __parse_top_answer(self):
+        """解析精华回答"""
+        next = True #是否解析下一页
+        page = 1
+        while next:
+            next = self.__parse_top_answer_one_page(page)
+            page += 1
+
+        
 class ZhihuUser(object):
     extra_info_key = ("education item", "education-extra item", "employment item", \
                       "location item", "position item");
