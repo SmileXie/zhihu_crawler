@@ -61,14 +61,12 @@ class ZhihuInspect(object):
         self.email = r"xxxxx"
         self.password = r"xxxxx"
         self.debug_level = DebugLevel.verbose
-        self.users = []
-        self.topics = []
         self.visited_user_url = set() #set 查找元素的时间复杂度是O(1)
         self.visited_topic_url = set() #set 查找元素的时间复杂度是O(1)
         pass
     
     def do_crawler(self):
-        self.traverse_topic()
+        self.__traverse_topic()
     
     def debug_print(self, level, log_str):
         if level.value >= self.debug_level.value:
@@ -78,11 +76,6 @@ class ZhihuInspect(object):
     def save_file(self, path, str_content, encoding):
         with codecs.open(path, 'w', encoding)  as fp:
             fp.write(str_content)
-        
-    def print_all_user(self):
-        print("user num: " + str(len(self.users)))
-        for user in self.users:
-            print(user)
             
     def save_user(self, user):
         with open("users_json.txt", "a") as fp:
@@ -94,10 +87,9 @@ class ZhihuInspect(object):
             return False     
         else:
             self.visited_user_url.add(user.get_url())
-            self.users.append(user)
             return True
 
-    def save_topic(self, topic):
+    def __save_topic(self, topic):
         with open("topic_json.txt", "a") as fp:
             json_str = json.dumps(topic, default = topic_obj_to_dict, ensure_ascii = False, sort_keys = True)
             fp.write(json_str + "\n")
@@ -124,15 +116,15 @@ class ZhihuInspect(object):
         reponse_login = requests.post(login_url, headers = my_header, data = post_dict)
         self.save_file('login_page.htm', reponse_login.text, reponse_login.encoding)
 
-    def traverse_topic(self):
+    def __traverse_topic(self):
         """遍历话题，解析各子话题"""
         help_q = deque() #广度优先搜索的辅助队列
         
         topic = ZhihuTopic(self.root_topic)
         if topic.is_valid():
             self.visited_topic_url.add(topic.get_url())
-            self.topics.append(topic)
-            self.save_topic(topic) 
+            self.__save_topic(topic) 
+            self.__parse_top_answers(topic.get_top_answers())
             help_q.append(topic)
         
         while len(help_q) != 0:
@@ -142,10 +134,15 @@ class ZhihuInspect(object):
                     new_topic = ZhihuTopic(topic_url)
                     if new_topic.is_valid():
                         self.visited_topic_url.add(new_topic.get_url())
-                        self.topics.append(new_topic)
-                        self.save_topic(new_topic) 
+                        self.__save_topic(new_topic) 
+                        self.__parse_top_answers(new_topic.get_top_answers())
                         help_q.append(new_topic)
-                    
+    
+    def __parse_top_answers(self, top_answers):
+        for as_url in top_answers:
+            answer = ZhihuAnswer(as_url)
+            #todo 记录answer
+                   
     def get_user_url(self, url):
         """获一个页面中的所有用户链接"""
         user_url = set()
@@ -220,12 +217,12 @@ class ZhihuTopic(object):
         self.debug_level = DebugLevel.verbose
         self.url = url
         self.related_topic_urls = []
-        self.top_answer_urls = []
-        self.valid = self.parse_topic()
-        if self.valid:
-            self.parse_related_topic()
+        self.__top_answer_urls = []
+        self.__valid = self.__parse_topic()
+        if self.__valid:
+            self.__parse_related_topic()
             self.__parse_top_answer()
-            self.debug_print(DebugLevel.verbose, "get topic " + str(len(self.top_answer_urls)) + "answers") 
+            self.debug_print(DebugLevel.verbose, "find " + str(len(self.__top_answer_urls)) + " answers") 
             self.debug_print(DebugLevel.verbose, "parse " + url + ". topic " + self.name + " OK!")
         pass
 
@@ -235,15 +232,18 @@ class ZhihuTopic(object):
         #todo: write log file.
 
     def is_valid(self):
-        return self.valid
+        return self.__valid
 
     def get_url(self):
         return self.url
     
+    def get_top_answers(self):
+        return self.__top_answer_urls
+    
     def get_related_topic(self):
         return self.related_topic_urls
        
-    def parse_topic(self):
+    def __parse_topic(self):
         is_ok = False
         try:
             response = requests.get(self.url, headers = my_header)
@@ -258,7 +258,7 @@ class ZhihuTopic(object):
         finally:
             return is_ok
     
-    def parse_related_topic(self):
+    def __parse_related_topic(self):
         """解析父话题或子话题"""
         for a_tag in self.soup.find_all("a", class_="zm-item-tag"):
             if a_tag["href"].find("/topic/") == 0:
@@ -268,7 +268,7 @@ class ZhihuTopic(object):
     def __parse_top_answer_one_page(self, page):
         """解析一个精华回答页面，返回值:是否还有下一页"""
 
-        self.debug_print(DebugLevel.verbose, "paser top answer of topic " + self.url + " page" \
+        self.debug_print(DebugLevel.verbose, "paser top answer of topic " + self.url + " " + self.name + " page" \
                         + str(page))
                              
         if page == 1:
@@ -288,7 +288,7 @@ class ZhihuTopic(object):
         for tag in soup.find_all("div", class_="zm-item-rich-text js-collapse-body"):
             try:
                 question_url = self.base_url + tag["data-entry-url"]
-                self.top_answer_urls.append(question_url)
+                self.__top_answer_urls.append(question_url)
             except:
                 self.debug_print(DebugLevel.warning, "fail to get question url in " \
                              + self.url + " page" + str(page))        
@@ -303,13 +303,47 @@ class ZhihuTopic(object):
         
     def __parse_top_answer(self):
         """解析精华回答"""
-        next = True #是否解析下一页
+        go_next_page = True #是否解析下一页
         page = 1
-        while next:
-            next = self.__parse_top_answer_one_page(page)
+        while go_next_page:
+            go_next_page = self.__parse_top_answer_one_page(page)
             page += 1
 
-        
+class ZhihuAnswer(object):
+    
+    def __init__(self, url):
+        self.__base_url = r"http://www.zhihu.com"
+        self.__debug_level = DebugLevel.verbose
+        self.url = url
+        self.__valid = self.__parse_answer()
+    
+    def __debug_print(self, level, log_str):
+        if level.value >= self.__debug_level.value:
+            print(log_str)
+    
+    def __parse_answer(self):
+        is_ok = False
+        try:
+            response = requests.get(self.url, headers = my_header)
+            soup = BeautifulSoup(response.text)        
+            self.soup = soup
+            
+            #<div id="zh-question-title" data-editable="false">
+            #    <h2 class="zm-item-title zm-editable-content">            
+            #        <a href="/question/20296247">数学里的 e 为什么叫做自然底数？是不是自然界里什么东西恰好是 e？</a>            
+            #    </h2>
+            #</div>
+            
+            title_tag = soup.find("div", id="zh-question-title")
+            a_tag = title_tag.find("a")
+            self.question = a_tag.contents[0]
+            self.question_url = self.__base_url + a_tag["href"]
+            self.__debug_print(DebugLevel.verbose, "parse " + self.url + " " + self.question + " ok.")
+            is_ok = True
+        except:
+            self.__debug_print(DebugLevel.warning, "fail to parse " + self.url)
+        return is_ok
+           
 class ZhihuUser(object):
     extra_info_key = ("education item", "education-extra item", "employment item", \
                       "location item", "position item");
