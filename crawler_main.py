@@ -1,8 +1,6 @@
 """
 Zhihu bigdata 
-
 Author: smilexie1113@gmail.com
-
 """
 import requests
 import codecs 
@@ -29,7 +27,7 @@ my_header = {
     }
 
 def user_obj_to_dict(obj):
-    """把ZhihuUser转成dict数据，用于ZhihuInspect。save_user中的json dump"""   
+    """把ZhihuUser转成dict数据，用于ZhihuCrawler。save_user中的json dump"""   
     tmp_dict = {}
     tmp_dict["name"] = obj.name
     tmp_dict["url"] = obj.user_url
@@ -45,13 +43,13 @@ def user_obj_to_dict(obj):
     return tmp_dict
 
 def topic_obj_to_dict(obj):
-    """把ZhihuTopic转成dict数据，用于ZhihuInspect。save_topic中的json dump"""   
+    """把ZhihuTopic转成dict数据，用于ZhihuCrawler。save_topic中的json dump"""   
     tmp_dict = {}
     tmp_dict["name"] = obj.name
     tmp_dict["url"] = obj.url
     return tmp_dict
     
-class ZhihuInspect(object):
+class ZhihuCrawler(object):
     
     def __init__(self):
         self.base_url = r"http://www.zhihu.com"
@@ -68,7 +66,7 @@ class ZhihuInspect(object):
     def do_crawler(self):
         self.__traverse_topic()
     
-    def debug_print(self, level, log_str):
+    def __debug_print(self, level, log_str):
         if level.value >= self.debug_level.value:
             print(log_str)
         #todo: write log file.
@@ -117,7 +115,7 @@ class ZhihuInspect(object):
         self.save_file('login_page.htm', reponse_login.text, reponse_login.encoding)
 
     def __traverse_topic(self):
-        """遍历话题，解析各子话题"""
+        """广度优先遍历话题，解析各子话题"""
         help_q = deque() #广度优先搜索的辅助队列
         
         topic = ZhihuTopic(self.root_topic)
@@ -141,7 +139,8 @@ class ZhihuInspect(object):
     def __parse_top_answers(self, top_answers):
         for as_url in top_answers:
             answer = ZhihuAnswer(as_url)
-            #todo 记录answer
+            pass #todo 记录answer
+            
                    
     def get_user_url(self, url):
         """获一个页面中的所有用户链接"""
@@ -196,7 +195,7 @@ class ZhihuInspect(object):
             text = response.text
             return text
         except Exception as e:
-            self.debug_print(DebugLevel.warning, "fail to get " \
+            self.__debug_print(DebugLevel.warning, "fail to get " \
                              + url + " error info: " + str(e))
             return ""
     
@@ -206,7 +205,7 @@ class ZhihuInspect(object):
             self.save_file(path, response.text, response.encoding)
             return
         except Exception as e:
-            self.debug_print(DebugLevel.warning, "fail to get " \
+            self.__debug_print(DebugLevel.warning, "fail to get " \
                              + url + " error info: " + str(e))
             return
 
@@ -222,11 +221,11 @@ class ZhihuTopic(object):
         if self.__valid:
             self.__parse_related_topic()
             self.__parse_top_answer()
-            self.debug_print(DebugLevel.verbose, "find " + str(len(self.__top_answer_urls)) + " answers") 
-            self.debug_print(DebugLevel.verbose, "parse " + url + ". topic " + self.name + " OK!")
+            self.__debug_print(DebugLevel.verbose, "find " + str(len(self.__top_answer_urls)) + " answers") 
+            self.__debug_print(DebugLevel.verbose, "parse " + url + ". topic " + self.name + " OK!")
         pass
 
-    def debug_print(self, level, log_str):
+    def __debug_print(self, level, log_str):
         if level.value >= self.debug_level.value:
             print(log_str)
         #todo: write log file.
@@ -253,7 +252,7 @@ class ZhihuTopic(object):
             self.name = topic_info_tag.contents[0]
             is_ok = True
         except Exception as err:
-            self.debug_print(DebugLevel.warning, "exception raised by parsing " \
+            self.__debug_print(DebugLevel.warning, "exception raised by parsing " \
                              + self.url + " error info: " + err)            
         finally:
             return is_ok
@@ -268,7 +267,7 @@ class ZhihuTopic(object):
     def __parse_top_answer_one_page(self, page):
         """解析一个精华回答页面，返回值:是否还有下一页"""
 
-        self.debug_print(DebugLevel.verbose, "paser top answer of topic " + self.url + " " + self.name + " page" \
+        self.__debug_print(DebugLevel.verbose, "paser top answer of topic " + self.url + " " + self.name + " page" \
                         + str(page))
                              
         if page == 1:
@@ -280,7 +279,7 @@ class ZhihuTopic(object):
                 response = requests.get(page_url, headers = my_header)
                 soup = BeautifulSoup(response.text)
             except:
-                self.debug_print(DebugLevel.warning, "fail to get page" \
+                self.__debug_print(DebugLevel.warning, "fail to get page" \
                              + page_url)  
                 return False
 
@@ -290,7 +289,7 @@ class ZhihuTopic(object):
                 question_url = self.base_url + tag["data-entry-url"]
                 self.__top_answer_urls.append(question_url)
             except:
-                self.debug_print(DebugLevel.warning, "fail to get question url in " \
+                self.__debug_print(DebugLevel.warning, "fail to get question url in " \
                              + self.url + " page" + str(page))        
                 continue
 
@@ -338,9 +337,35 @@ class ZhihuAnswer(object):
             a_tag = title_tag.find("a")
             self.question = a_tag.contents[0]
             self.question_url = self.__base_url + a_tag["href"]
-            self.__debug_print(DebugLevel.verbose, "parse " + self.url + " " + self.question + " ok.")
+            
+
+            #<div class="answer-head">
+            #   <a class="author-link" data-tip="p$t$andiely921" href="/people/andiely921">鲁医生</a><span class="sep">
+            #   或
+            #   <div class="zm-item-answer-author-info">
+            #       <span class="name">匿名用户</span>
+            #   </div>
+            #   <div class="zm-item-vote-info " data-votecount="23730">
+            # ...
+            head_as_tag = soup.find("div", class_="answer-head");
+            vote_tag = head_as_tag.find("div", class_="zm-item-vote-info ");
+            self.votecount = int(vote_tag["data-votecount"])  
+
+            author_tag = head_as_tag.find("a", class_ = "author-link")
+            if author_tag is None:
+                #"匿名用户"等，无author-link
+                author_tag = head_as_tag.find("div", class_="zm-item-answer-author-info");
+                author_name_tag = author_tag.find("span", class_="name")
+                self.author_name = author_name_tag.contents[0]
+            else:
+                self.author_name = author_tag.contents[0]
+
+            self.__debug_print(DebugLevel.verbose, self.url + " " + self.question + "vote:" \
+                + str(self.votecount) + " author:" + self.author_name + " ok.")
+                
             is_ok = True
         except:
+            time.sleep(10)
             self.__debug_print(DebugLevel.warning, "fail to parse " + self.url)
         return is_ok
            
@@ -362,7 +387,7 @@ class ZhihuUser(object):
     def get_url(self):
         return self.user_url
     
-    def debug_print(self, level, log_str):
+    def __debug_print(self, level, log_str):
         if level.value >= self.debug_level.value:
             print(log_str)
     
@@ -371,7 +396,7 @@ class ZhihuUser(object):
             fp.write(str_content)
             
     def parse_user_page(self):
-        self.debug_print(DebugLevel.verbose, "parse " + self.user_url)
+        self.__debug_print(DebugLevel.verbose, "parse " + self.user_url)
         try:
             response = requests.get(self.user_url, headers = my_header)
             #self.save_file("user_page.htm", response.text, response.encoding)
@@ -397,23 +422,23 @@ class ZhihuUser(object):
             self.agree_cnt = int(agree_cnt)
             is_ok = True
         except AttributeError:
-            self.debug_print(DebugLevel.warning, "fail to parse " + self.user_url)
+            self.__debug_print(DebugLevel.warning, "fail to parse " + self.user_url)
             is_ok = False
         except TimeoutError:
-            self.debug_print(DebugLevel.warning, "get " + self.user_url + " timeout.")
+            self.__debug_print(DebugLevel.warning, "get " + self.user_url + " timeout.")
             is_ok = False
         except ConnectionError: 
-            self.debug_print(DebugLevel.warning, "connect " + self.user_url + " timeout.")
+            self.__debug_print(DebugLevel.warning, "connect " + self.user_url + " timeout.")
             is_ok = False
         except Exception as e:
-            self.debug_print(DebugLevel.warning, "some other exception raised by parsing " \
+            self.__debug_print(DebugLevel.warning, "some other exception raised by parsing " \
                              + self.user_url + "error info: " + str(e))
             is_ok = False
         finally:
             return is_ok
     
     def parse_extra_info(self):
-        #知乎上的格式类似以下形式：<span class="position item" title="流程设计">
+        #<span class="position item" title="流程设计">
         for key_str in self.extra_info_key:
             tag = self.soup.find("span", class_=key_str)
             if tag is not None:
@@ -435,7 +460,7 @@ class ZhihuUser(object):
         return out_str
 
 def main():
-    z = ZhihuInspect()
+    z = ZhihuCrawler()
     z.init_xsrf()
     z.do_crawler()
 
