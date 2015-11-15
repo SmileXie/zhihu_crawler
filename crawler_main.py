@@ -55,19 +55,19 @@ class ZhihuCrawler(object):
         self.base_url = r"http://www.zhihu.com"
         self.topic_square_url = r"http://www.zhihu.com/topics"
         self.root_topic = r"http://www.zhihu.com/topic/19776749" #知乎的根话题
-        self.first_url = self.topic_square_url
         self.email = r"xxxxx"
         self.password = r"xxxxx"
-        self.debug_level = DebugLevel.verbose
-        self.visited_user_url = set() #set 查找元素的时间复杂度是O(1)
-        self.visited_topic_url = set() #set 查找元素的时间复杂度是O(1)
+        self.__debug_level = DebugLevel.verbose
+        self.__visited_user_url = set() #set 查找元素的时间复杂度是O(1)
+        self.__visited_topic_url = set() #set 查找元素的时间复杂度是O(1)
+        self.__anonymous_cnt = 0
         pass
     
     def do_crawler(self):
         self.__traverse_topic()
     
     def __debug_print(self, level, log_str):
-        if level.value >= self.debug_level.value:
+        if level.value >= self.__debug_level.value:
             print(log_str)
         #todo: write log file.
     
@@ -75,16 +75,16 @@ class ZhihuCrawler(object):
         with codecs.open(path, 'w', encoding)  as fp:
             fp.write(str_content)
             
-    def save_user(self, user):
+    def __save_user(self, user):
         with open("users_json.txt", "a") as fp:
             json_str = json.dumps(user, default = user_obj_to_dict, ensure_ascii = False, sort_keys = True)
             fp.write(json_str + "\n")
     
     def add_user(self, user):
-        if user.get_url() in self.visited_user_url: #set 查找元素的时间复杂度是O(1)
+        if user.get_url() in self.__visited_user_url: #set 查找元素的时间复杂度是O(1)
             return False     
         else:
-            self.visited_user_url.add(user.get_url())
+            self.__visited_user_url.add(user.get_url())
             return True
 
     def __save_topic(self, topic):
@@ -120,7 +120,7 @@ class ZhihuCrawler(object):
         
         topic = ZhihuTopic(self.root_topic)
         if topic.is_valid():
-            self.visited_topic_url.add(topic.get_url())
+            self.__visited_topic_url.add(topic.get_url())
             self.__save_topic(topic) 
             self.__parse_top_answers(topic.get_top_answers())
             help_q.append(topic)
@@ -128,10 +128,10 @@ class ZhihuCrawler(object):
         while len(help_q) != 0:
             tmp_topic = help_q.popleft()
             for topic_url in tmp_topic.get_related_topic():
-                if topic_url not in self.visited_topic_url:
+                if topic_url not in self.__visited_topic_url:
                     new_topic = ZhihuTopic(topic_url)
                     if new_topic.is_valid():
-                        self.visited_topic_url.add(new_topic.get_url())
+                        self.__visited_topic_url.add(new_topic.get_url())
                         self.__save_topic(new_topic) 
                         self.__parse_top_answers(new_topic.get_top_answers())
                         help_q.append(new_topic)
@@ -139,7 +139,13 @@ class ZhihuCrawler(object):
     def __parse_top_answers(self, top_answers):
         for as_url in top_answers:
             answer = ZhihuAnswer(as_url)
-            pass #todo 记录answer
+            if answer.get_author_url() is not None:
+                author = ZhihuUser(answer.get_author_url())
+                if author.is_valid():
+                    self.__visited_user_url.add(author.get_url())
+                    self.__save_user(author)
+            else:
+                self.__anonymous_cnt += 1
             
                    
     def get_user_url(self, url):
@@ -178,16 +184,6 @@ class ZhihuCrawler(object):
                 pass
         return question_url
     
-    def process_question_url(self, urls):
-        for question_url in urls:
-            user_urls = self.get_user_url(question_url)
-            for user_url in user_urls:
-                time.sleep(0.5) #延迟0.5s 避免被智乎认为请求过于频繁
-                user = ZhihuUser(user_url)
-                if user.is_valid():
-                    if self.add_user(user):
-                        self.save_user(user) 
-            #return #todo: delete. 测试用，只处理第一个quesion url
             
     def get_page(self, url):
         try:
@@ -213,7 +209,7 @@ class ZhihuCrawler(object):
 class ZhihuTopic(object):
     def __init__(self, url):
         self.base_url = r"http://www.zhihu.com"
-        self.debug_level = DebugLevel.verbose
+        self.__debug_level = DebugLevel.verbose
         self.url = url
         self.related_topic_urls = []
         self.__top_answer_urls = []
@@ -226,7 +222,7 @@ class ZhihuTopic(object):
         pass
 
     def __debug_print(self, level, log_str):
-        if level.value >= self.debug_level.value:
+        if level.value >= self.__debug_level.value:
             print(log_str)
         #todo: write log file.
 
@@ -356,25 +352,30 @@ class ZhihuAnswer(object):
                 #"匿名用户"等，无author-link
                 author_tag = head_as_tag.find("div", class_="zm-item-answer-author-info");
                 author_name_tag = author_tag.find("span", class_="name")
-                self.author_name = author_name_tag.contents[0]
+                self.__author_name = author_name_tag.contents[0]
+                self.__author_url = None
             else:
-                self.author_name = author_tag.contents[0]
+                self.__author_name = author_tag.contents[0]
+                self.__author_url = self.__base_url + author_tag["href"]
 
             self.__debug_print(DebugLevel.verbose, self.url + " " + self.question + "vote:" \
-                + str(self.votecount) + " author:" + self.author_name + " ok.")
+                + str(self.votecount) + " author:" + self.__author_name + " ok.")
                 
             is_ok = True
         except:
             time.sleep(10)
             self.__debug_print(DebugLevel.warning, "fail to parse " + self.url)
         return is_ok
-           
+    
+    def get_author_url(self):
+        return self.__author_url
+    
 class ZhihuUser(object):
     extra_info_key = ("education item", "education-extra item", "employment item", \
                       "location item", "position item");
         
     def __init__(self, user_url):
-        self.debug_level = DebugLevel.verbose
+        self.__debug_level = DebugLevel.verbose
         self.user_url = user_url
         self.valid = self.parse_user_page()
         if self.valid:
@@ -388,7 +389,7 @@ class ZhihuUser(object):
         return self.user_url
     
     def __debug_print(self, level, log_str):
-        if level.value >= self.debug_level.value:
+        if level.value >= self.__debug_level.value:
             print(log_str)
     
     def save_file(self, path, str_content, encoding):
