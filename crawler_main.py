@@ -1,5 +1,5 @@
 """
-Zhihu bigdata 
+Zhihu Crawler 
 Author: smilexie1113@gmail.com
 """
 import requests
@@ -60,7 +60,7 @@ class ZhihuCrawler(object):
         self.__debug_level = DebugLevel.verbose
         self.__visited_user_url = set() #set 查找元素的时间复杂度是O(1)
         self.__visited_topic_url = set() #set 查找元素的时间复杂度是O(1)
-        self.__anonymous_cnt = 0
+        self.__anonymous_cnt = 0 #精华回答中的匿名个数
         pass
     
     def do_crawler(self):
@@ -71,7 +71,7 @@ class ZhihuCrawler(object):
             print(log_str)
         #todo: write log file.
     
-    def save_file(self, path, str_content, encoding):
+    def __save_file(self, path, str_content, encoding):
         with codecs.open(path, 'w', encoding)  as fp:
             fp.write(str_content)
             
@@ -80,13 +80,6 @@ class ZhihuCrawler(object):
             json_str = json.dumps(user, default = user_obj_to_dict, ensure_ascii = False, sort_keys = True)
             fp.write(json_str + "\n")
     
-    def add_user(self, user):
-        if user.get_url() in self.__visited_user_url: #set 查找元素的时间复杂度是O(1)
-            return False     
-        else:
-            self.__visited_user_url.add(user.get_url())
-            return True
-
     def __save_topic(self, topic):
         with open("topic_json.txt", "a") as fp:
             json_str = json.dumps(topic, default = topic_obj_to_dict, ensure_ascii = False, sort_keys = True)
@@ -96,7 +89,7 @@ class ZhihuCrawler(object):
         """初始化，获取xsrf"""
         response = requests.get(self.base_url, headers = my_header)
         text = response.text
-        self.save_file("pre_page.htm", text, response.encoding)
+        self.__save_file("pre_page.htm", text, response.encoding)
         soup = BeautifulSoup(text)
         input_tag = soup.find("input", {"name": "_xsrf"})
         xsrf = input_tag["value"]
@@ -112,7 +105,7 @@ class ZhihuCrawler(object):
             '_xsrf':self.xsrf    
         }
         reponse_login = requests.post(login_url, headers = my_header, data = post_dict)
-        self.save_file('login_page.htm', reponse_login.text, reponse_login.encoding)
+        self.__save_file('login_page.htm', reponse_login.text, reponse_login.encoding)
 
     def __traverse_topic(self):
         """广度优先遍历话题，解析各子话题"""
@@ -140,10 +133,11 @@ class ZhihuCrawler(object):
         for as_url in top_answers:
             answer = ZhihuAnswer(as_url)
             if answer.get_author_url() is not None:
-                author = ZhihuUser(answer.get_author_url())
-                if author.is_valid():
-                    self.__visited_user_url.add(author.get_url())
-                    self.__save_user(author)
+                if answer.get_author_url() not in self.__visited_user_url:
+                    author = ZhihuUser(answer.get_author_url())
+                    if author.is_valid():
+                        self.__visited_user_url.add(author.get_url())
+                        self.__save_user(author)
             else:
                 self.__anonymous_cnt += 1
             
@@ -198,7 +192,7 @@ class ZhihuCrawler(object):
     def get_and_save_page(self, url, path):
         try:
             response = requests.get(url, headers = my_header)
-            self.save_file(path, response.text, response.encoding)
+            self.__save_file(path, response.text, response.encoding)
             return
         except Exception as e:
             self.__debug_print(DebugLevel.warning, "fail to get " \
@@ -358,8 +352,8 @@ class ZhihuAnswer(object):
                 self.__author_name = author_tag.contents[0]
                 self.__author_url = self.__base_url + author_tag["href"]
 
-            self.__debug_print(DebugLevel.verbose, self.url + " " + self.question + "vote:" \
-                + str(self.votecount) + " author:" + self.__author_name + " ok.")
+            self.__debug_print("parse " + DebugLevel.verbose, self.url  + " ok." + " " + self.question + "vote:" \
+                + str(self.votecount) + " author:" + self.__author_name)
                 
             is_ok = True
         except:
@@ -392,15 +386,15 @@ class ZhihuUser(object):
         if level.value >= self.__debug_level.value:
             print(log_str)
     
-    def save_file(self, path, str_content, encoding):
+    def __save_file(self, path, str_content, encoding):
         with codecs.open(path, 'w', encoding)  as fp:
             fp.write(str_content)
             
     def parse_user_page(self):
-        self.__debug_print(DebugLevel.verbose, "parse " + self.user_url)
+        
         try:
             response = requests.get(self.user_url, headers = my_header)
-            #self.save_file("user_page.htm", response.text, response.encoding)
+            #self.__save_file("user_page.htm", response.text, response.encoding)
             self.first_user_page_is_save = True
             soup = BeautifulSoup(response.text)        
             self.soup = soup
@@ -422,17 +416,9 @@ class ZhihuUser(object):
             self.thank_cnt = int(thank_cnt)
             self.agree_cnt = int(agree_cnt)
             is_ok = True
-        except AttributeError:
-            self.__debug_print(DebugLevel.warning, "fail to parse " + self.user_url)
-            is_ok = False
-        except TimeoutError:
-            self.__debug_print(DebugLevel.warning, "get " + self.user_url + " timeout.")
-            is_ok = False
-        except ConnectionError: 
-            self.__debug_print(DebugLevel.warning, "connect " + self.user_url + " timeout.")
-            is_ok = False
+            self.__debug_print(DebugLevel.verbose, "parse " + self.user_url + " ok. " + "name:" + self.name)
         except Exception as e:
-            self.__debug_print(DebugLevel.warning, "some other exception raised by parsing " \
+            self.__debug_print(DebugLevel.warning, "some exception raised by parsing " \
                              + self.user_url + "error info: " + str(e))
             is_ok = False
         finally:
