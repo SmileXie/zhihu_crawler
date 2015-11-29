@@ -16,60 +16,6 @@ class DebugLevel(Enum):
     error = 3
     end = 4
 
-my_header = {
-        'Connection': 'Keep-Alive',
-        'Accept': 'text/html, application/xhtml+xml, */*',
-        'Accept-Language': 'zh-CN,zh;q=0.8',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko',
-        'Accept-Encoding': 'gzip,deflate,sdch',
-        'Host': 'www.zhihu.com',
-        'DNT': '1'
-    }
-
-def user_obj_to_dict(obj):
-    """把ZhihuUser转成dict数据，用于ZhihuCrawler。save_user中的json dump"""   
-    tmp_dict = {}
-    tmp_dict["name"] = obj.name
-    tmp_dict["url"] = obj.user_url
-    tmp_dict["thank_cnt"] = obj.thank_cnt
-    tmp_dict["agree_cnt"] = obj.agree_cnt
-    tmp_dict["is_male"] = obj.gender_is_male
-    for key_str in ZhihuUser.extra_info_key:
-        if key_str in obj.extra_info:
-            tmp_dict[key_str] = obj.extra_info[key_str]
-        else:
-            tmp_dict[key_str] = ""
-        
-    return tmp_dict
-
-def topic_obj_to_dict(obj):
-    """把ZhihuTopic转成dict数据，用于ZhihuCrawler。save_topic中的json dump"""   
-    tmp_dict = {}
-    tmp_dict["name"] = obj.name
-    tmp_dict["url"] = obj.url
-    return tmp_dict
-
-def answer_obj_to_dict(obj):
-    """把ZhihuAnswer转成dict数据，用于ZhihuCrawler。save_answer中的json dump"""   
-    tmp_dict = {}
-    tmp_dict["question"] = obj.question
-    tmp_dict["url"] = obj.url
-    tmp_dict["author"] = obj.get_author_name()
-    tmp_dict["votecount"] = obj.votecount;
-    return tmp_dict
-
-class ZhihuCommon(object):
-    """ZhihuCrawler, ZhihuTopic, ZhihuUser三个类的共用代码, 包含一些服务于debug的函数, 共用的网页获取函数, 等。"""
-    def get_and_save_page(url, path):
-        try:
-            response = requests.get(url, headers = my_header)
-            with codecs.open(path, 'w', response.encoding)  as fp:
-                fp.write(response.text)
-            return
-        except Exception as e:
-            print("fail to get " + url + " error info: " + str(e))
-            return
-  
 class ZhihuCrawler(object):
     
     def __init__(self):
@@ -99,22 +45,22 @@ class ZhihuCrawler(object):
             
     def __save_user(self, user):
         with open("users_json.txt", "a") as fp:
-            json_str = json.dumps(user, default = user_obj_to_dict, ensure_ascii = False, sort_keys = True)
+            json_str = json.dumps(user, default = ZhihuUser.obj_to_dict, ensure_ascii = False, sort_keys = True)
             fp.write(json_str + "\n")
     
     def __save_answer(self, answer):
         with open("answer_json.txt", "a") as fp:
-            json_str = json.dumps(answer, default = answer_obj_to_dict, ensure_ascii = False, sort_keys = True)
+            json_str = json.dumps(answer, default = ZhihuAnswer.obj_to_dict, ensure_ascii = False, sort_keys = True)
             fp.write(json_str + "\n")
             
     def __save_topic(self, topic):
         with open("topic_json.txt", "a") as fp:
-            json_str = json.dumps(topic, default = topic_obj_to_dict, ensure_ascii = False, sort_keys = True)
+            json_str = json.dumps(topic, default = ZhihuTopic.obj_to_dict, ensure_ascii = False, sort_keys = True)
             fp.write(json_str + "\n")
     
     def init_xsrf(self):
         """初始化，获取xsrf"""
-        response = requests.get(self.base_url, headers = my_header)
+        response = requests.get(self.base_url, headers = ZhihuCommon.my_header)
         text = response.text
         self.__save_file("pre_page.htm", text, response.encoding)
         soup = BeautifulSoup(text)
@@ -131,7 +77,7 @@ class ZhihuCrawler(object):
             'email': self.email,
             '_xsrf':self.xsrf    
         }
-        reponse_login = requests.post(login_url, headers = my_header, data = post_dict)
+        reponse_login = requests.post(login_url, headers = ZhihuCommon.my_header, data = post_dict)
         self.__save_file('login_page.htm', reponse_login.text, reponse_login.encoding)
 
     def __traverse_topic(self):
@@ -225,11 +171,20 @@ class ZhihuTopic(object):
     
     def get_related_topic(self):
         return self.__related_topic_urls
-       
+    
+    @staticmethod
+    def obj_to_dict(obj):
+        """把ZhihuTopic转成dict数据，用于ZhihuCrawler。save_topic中的json dump"""   
+        tmp_dict = {}
+        tmp_dict["name"] = obj.name
+        tmp_dict["url"] = obj.url
+        return tmp_dict
+
+
     def __parse_topic(self):
         is_ok = False
         try:
-            response = requests.get(self.url, headers = my_header)
+            response = requests.get(self.url, headers = ZhihuCommon.my_header)
             soup = BeautifulSoup(response.text)
             self.soup = soup
             topic_info_tag = soup.find("h1", class_="zm-editable-content")
@@ -256,7 +211,7 @@ class ZhihuTopic(object):
 
         page_url = self.url + r"/top-answers?page=" + str(page) #指定页码
         try:
-            response = requests.get(page_url, headers = my_header)
+            response = requests.get(page_url, headers = ZhihuCommon.my_header)
             soup = BeautifulSoup(response.text)
         except:
             self.__debug_print(DebugLevel.warning, "fail to get page " \
@@ -313,7 +268,7 @@ class ZhihuAnswer(object):
     def __parse_answer(self):
         is_ok = False
         try:
-            response = requests.get(self.url, headers = my_header)
+            response = requests.get(self.url, headers = ZhihuCommon.my_header)
             soup = BeautifulSoup(response.text)        
             self.soup = soup
             
@@ -362,7 +317,16 @@ class ZhihuAnswer(object):
             ZhihuCommon.get_and_save_page(self.url, "Fail_answer.html")
         return is_ok
     
-    
+    @staticmethod
+    def obj_to_dict(obj):
+        """把ZhihuAnswer转成dict数据，用于ZhihuCrawler。save_answer中的json dump"""   
+        tmp_dict = {}
+        tmp_dict["question"] = obj.question
+        tmp_dict["url"] = obj.url
+        tmp_dict["author"] = obj.__author_name
+        tmp_dict["votecount"] = obj.votecount;
+        
+        return tmp_dict
 class ZhihuUser(object):
     extra_info_key = ("education item", "education-extra item", "employment item", \
                       "location item", "position item");
@@ -388,10 +352,27 @@ class ZhihuUser(object):
     def __save_file(self, path, str_content, encoding):
         with codecs.open(path, 'w', encoding)  as fp:
             fp.write(str_content)
+    
+    @staticmethod
+    def obj_to_dict(obj):
+        """把ZhihuUser转成dict数据，用于ZhihuCrawler。save_user中的json dump"""   
+        tmp_dict = {}
+        tmp_dict["name"] = obj.name
+        tmp_dict["url"] = obj.user_url
+        tmp_dict["thank_cnt"] = obj.thank_cnt
+        tmp_dict["agree_cnt"] = obj.agree_cnt
+        tmp_dict["is_male"] = obj.gender_is_male
+        for key_str in ZhihuUser.extra_info_key:
+            if key_str in obj.extra_info:
+                tmp_dict[key_str] = obj.extra_info[key_str]
+            else:
+                tmp_dict[key_str] = ""
             
+        return tmp_dict 
+                
     def parse_user_page(self):        
         try:
-            response = requests.get(self.user_url, headers = my_header)
+            response = requests.get(self.user_url, headers = ZhihuCommon.my_header)
             #self.__save_file("user_page.htm", response.text, response.encoding)
             self.first_user_page_is_save = True
             soup = BeautifulSoup(response.text)        
@@ -444,6 +425,31 @@ class ZhihuUser(object):
 
         return out_str
 
+
+class ZhihuCommon(object):
+    """ZhihuCrawler, ZhihuTopic, ZhihuUser三个类的共用代码, 包含一些服务于debug的函数, 共用的网页获取函数, 等。"""
+    
+    my_header = {
+        'Connection': 'Keep-Alive',
+        'Accept': 'text/html, application/xhtml+xml, */*',
+        'Accept-Language': 'zh-CN,zh;q=0.8',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 6.3; WOW64; Trident/7.0; rv:11.0) like Gecko',
+        'Accept-Encoding': 'gzip,deflate,sdch',
+        'Host': 'www.zhihu.com',
+        'DNT': '1'
+    }
+    
+    @staticmethod
+    def get_and_save_page(url, path):
+        try:
+            response = requests.get(url, headers = ZhihuCommon.my_header)
+            with codecs.open(path, 'w', response.encoding)  as fp:
+                fp.write(response.text)
+            return
+        except Exception as e:
+            print("fail to get " + url + " error info: " + str(e))
+            return
+        
 def main():
     z = ZhihuCrawler()
     z.init_xsrf()
