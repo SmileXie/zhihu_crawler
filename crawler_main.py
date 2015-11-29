@@ -48,7 +48,28 @@ def topic_obj_to_dict(obj):
     tmp_dict["name"] = obj.name
     tmp_dict["url"] = obj.url
     return tmp_dict
-    
+
+def answer_obj_to_dict(obj):
+    """把ZhihuAnswer转成dict数据，用于ZhihuCrawler。save_answer中的json dump"""   
+    tmp_dict = {}
+    tmp_dict["question"] = obj.question
+    tmp_dict["url"] = obj.url
+    tmp_dict["author"] = obj.get_author_name()
+    tmp_dict["votecount"] = obj.votecount;
+    return tmp_dict
+
+class ZhihuCommon(object):
+    """ZhihuCrawler, ZhihuTopic, ZhihuUser三个类的共用代码, 包含一些服务于debug的函数, 共用的网页获取函数, 等。"""
+    def get_and_save_page(url, path):
+        try:
+            response = requests.get(url, headers = my_header)
+            with codecs.open(path, 'w', response.encoding)  as fp:
+                fp.write(response.text)
+            return
+        except Exception as e:
+            print("fail to get " + url + " error info: " + str(e))
+            return
+  
 class ZhihuCrawler(object):
     
     def __init__(self):
@@ -59,7 +80,8 @@ class ZhihuCrawler(object):
         self.password = r"xxxxx"
         self.__debug_level = DebugLevel.verbose
         self.__visited_user_url = set() #set 查找元素的时间复杂度是O(1)
-        self.__visited_topic_url = set() #set 查找元素的时间复杂度是O(1)
+        self.__visited_topic_url = set() 
+        self.__visited_answer_url = set()
         self.__anonymous_cnt = 0 #精华回答中的匿名个数
         pass
     
@@ -68,7 +90,7 @@ class ZhihuCrawler(object):
     
     def __debug_print(self, level, log_str):
         if level.value >= self.__debug_level.value:
-            print(log_str)
+            print("[CRAWLER] " + log_str)
         #todo: write log file.
     
     def __save_file(self, path, str_content, encoding):
@@ -80,6 +102,11 @@ class ZhihuCrawler(object):
             json_str = json.dumps(user, default = user_obj_to_dict, ensure_ascii = False, sort_keys = True)
             fp.write(json_str + "\n")
     
+    def __save_answer(self, answer):
+        with open("answer_json.txt", "a") as fp:
+            json_str = json.dumps(answer, default = answer_obj_to_dict, ensure_ascii = False, sort_keys = True)
+            fp.write(json_str + "\n")
+            
     def __save_topic(self, topic):
         with open("topic_json.txt", "a") as fp:
             json_str = json.dumps(topic, default = topic_obj_to_dict, ensure_ascii = False, sort_keys = True)
@@ -123,21 +150,29 @@ class ZhihuCrawler(object):
             for topic_url in tmp_topic.get_related_topic():
                 if topic_url not in self.__visited_topic_url:
                     new_topic = ZhihuTopic(topic_url)
-                    if new_topic.is_valid():
-                        self.__visited_topic_url.add(new_topic.get_url())
-                        self.__save_topic(new_topic) 
-                        self.__parse_top_answers(new_topic.get_top_answers())
-                        help_q.append(new_topic)
+                    if not new_topic.is_valid():
+                        continue
+                
+                    self.__visited_topic_url.add(new_topic.get_url())
+                    self.__save_topic(new_topic) 
+                    self.__parse_top_answers(new_topic.get_top_answers())
+                    help_q.append(new_topic)
     
     def __parse_top_answers(self, top_answers):
         for as_url in top_answers:
             answer = ZhihuAnswer(as_url)
-            if answer.get_author_url() is not None:
-                if answer.get_author_url() not in self.__visited_user_url:
-                    author = ZhihuUser(answer.get_author_url())
-                    if author.is_valid():
-                        self.__visited_user_url.add(author.get_url())
-                        self.__save_user(author)
+            if not answer.is_valid():
+                continue
+            
+            if as_url not in self.__visited_answer_url:
+                self.__visited_answer_url.add(as_url)
+                self.__save_answer(answer)
+            
+            if (answer.get_author_url() is not None) and (answer.get_author_url() not in self.__visited_user_url):
+                author = ZhihuUser(answer.get_author_url())
+                if author.is_valid():
+                    self.__visited_user_url.add(author.get_url())
+                    self.__save_user(author)
             else:
                 self.__anonymous_cnt += 1
             
@@ -158,54 +193,13 @@ class ZhihuCrawler(object):
                 #html页面中 a标签下无href属性，不处理 
                 pass
         return user_url
-    
-    def get_question_url(self, url):
-        """获取一个页面中的所有quesion链接"""
-        html_text = self.get_page(url)
-        soup = BeautifulSoup(html_text)
-        question_url = set()
-        for a_tag in soup.find_all("a"):
-            try:
-                if a_tag["href"].find("/question/") == 0:
-                    tmp_url = a_tag["href"]
-                    #把/question/31491363/answer/54700182 截取为 /question/31491363
-                    url_end = tmp_url.find("/", len("/question/")) #第二个参数为查找的启始下标
-                    if url_end > 0:
-                        tmp_url = tmp_url[:url_end]
-                    question_url.add(r"http://www.zhihu.com" + tmp_url)
-            except KeyError:
-                #html页面中 a标签下无href属性，不处理 
-                pass
-        return question_url
-    
-            
-    def get_page(self, url):
-        try:
-            response = requests.get(url, headers = my_header)
-            text = response.text
-            return text
-        except Exception as e:
-            self.__debug_print(DebugLevel.warning, "fail to get " \
-                             + url + " error info: " + str(e))
-            return ""
-    
-    def get_and_save_page(self, url, path):
-        try:
-            response = requests.get(url, headers = my_header)
-            self.__save_file(path, response.text, response.encoding)
-            return
-        except Exception as e:
-            self.__debug_print(DebugLevel.warning, "fail to get " \
-                             + url + " error info: " + str(e))
-            return
-
 
 class ZhihuTopic(object):
     def __init__(self, url):
         self.base_url = r"http://www.zhihu.com"
         self.__debug_level = DebugLevel.verbose
         self.url = url
-        self.related_topic_urls = []
+        self.__related_topic_urls = []
         self.__top_answer_urls = []
         self.__valid = self.__parse_topic()
         if self.__valid:
@@ -217,7 +211,7 @@ class ZhihuTopic(object):
 
     def __debug_print(self, level, log_str):
         if level.value >= self.__debug_level.value:
-            print(log_str)
+            print("[TOPIC] " + log_str)
         #todo: write log file.
 
     def is_valid(self):
@@ -230,7 +224,7 @@ class ZhihuTopic(object):
         return self.__top_answer_urls
     
     def get_related_topic(self):
-        return self.related_topic_urls
+        return self.__related_topic_urls
        
     def __parse_topic(self):
         is_ok = False
@@ -252,26 +246,22 @@ class ZhihuTopic(object):
         for a_tag in self.soup.find_all("a", class_="zm-item-tag"):
             if a_tag["href"].find("/topic/") == 0:
                 topic_url = self.base_url + a_tag["href"]
-                self.related_topic_urls.append(topic_url)
+                self.__related_topic_urls.append(topic_url)
 
     def __parse_top_answer_one_page(self, page):
         """解析一个精华回答页面，返回值:是否还有下一页"""
 
         self.__debug_print(DebugLevel.verbose, "paser top answer of topic " + self.url + " " + self.name + " page" \
                         + str(page))
-                             
-        if page == 1:
-            #第一页无需下载页面，直接用self.soup就好
-            soup = self.soup
-        else:
-            page_url = self.url + r"?page=" + str(page) #指定页码
-            try:
-                response = requests.get(page_url, headers = my_header)
-                soup = BeautifulSoup(response.text)
-            except:
-                self.__debug_print(DebugLevel.warning, "fail to get page" \
-                             + page_url)  
-                return False
+
+        page_url = self.url + r"/top-answers?page=" + str(page) #指定页码
+        try:
+            response = requests.get(page_url, headers = my_header)
+            soup = BeautifulSoup(response.text)
+        except:
+            self.__debug_print(DebugLevel.warning, "fail to get page " \
+                         + page_url)  
+            return False
 
         #搜索question的url
         for tag in soup.find_all("div", class_="zm-item-rich-text js-collapse-body"):
@@ -287,7 +277,8 @@ class ZhihuTopic(object):
         for tag in soup.find_all("a"):
             if tag.contents[0] == "下一页" :
                 return True
-
+        
+        ZhihuCommon.get_and_save_page(page_url, "last_page_in_topic.html")
         return False
         
     def __parse_top_answer(self):
@@ -306,9 +297,18 @@ class ZhihuAnswer(object):
         self.url = url
         self.__valid = self.__parse_answer()
     
+    def is_valid(self):
+        return self.__valid;
+    
+    def get_author_url(self):
+        return self.__author_url
+    
+    def get_author_name(self):
+        return self.__author_name;
+    
     def __debug_print(self, level, log_str):
         if level.value >= self.__debug_level.value:
-            print(log_str)
+            print("[ANSWER] " + log_str)
     
     def __parse_answer(self):
         is_ok = False
@@ -352,17 +352,16 @@ class ZhihuAnswer(object):
                 self.__author_name = author_tag.contents[0]
                 self.__author_url = self.__base_url + author_tag["href"]
 
-            self.__debug_print("parse " + DebugLevel.verbose, self.url  + " ok." + " " + self.question + "vote:" \
+            self.__debug_print(DebugLevel.verbose, "parse " + self.url  + " ok." + " " + self.question + "vote:" \
                 + str(self.votecount) + " author:" + self.__author_name)
                 
             is_ok = True
-        except:
+        except Exception as e:
             time.sleep(10)
-            self.__debug_print(DebugLevel.warning, "fail to parse " + self.url)
+            self.__debug_print(DebugLevel.warning, "fail to parse " + self.url + "ErrInfo: " + str(e))
+            ZhihuCommon.get_and_save_page(self.url, "Fail_answer.html")
         return is_ok
     
-    def get_author_url(self):
-        return self.__author_url
     
 class ZhihuUser(object):
     extra_info_key = ("education item", "education-extra item", "employment item", \
@@ -384,14 +383,13 @@ class ZhihuUser(object):
     
     def __debug_print(self, level, log_str):
         if level.value >= self.__debug_level.value:
-            print(log_str)
+            print("[USER] " + log_str)
     
     def __save_file(self, path, str_content, encoding):
         with codecs.open(path, 'w', encoding)  as fp:
             fp.write(str_content)
             
-    def parse_user_page(self):
-        
+    def parse_user_page(self):        
         try:
             response = requests.get(self.user_url, headers = my_header)
             #self.__save_file("user_page.htm", response.text, response.encoding)
@@ -419,7 +417,7 @@ class ZhihuUser(object):
             self.__debug_print(DebugLevel.verbose, "parse " + self.user_url + " ok. " + "name:" + self.name)
         except Exception as e:
             self.__debug_print(DebugLevel.warning, "some exception raised by parsing " \
-                             + self.user_url + "error info: " + str(e))
+                             + self.user_url + "ErrInfo: " + str(e))
             is_ok = False
         finally:
             return is_ok

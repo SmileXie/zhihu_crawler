@@ -52,3 +52,5 @@ login_page.htm
 pre_page.htm
 *.htm
 topic_json.txt
+*.txt
+*.html
