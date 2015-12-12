@@ -104,6 +104,7 @@ class ZhihuCrawler(object):
                     help_q.append(new_topic)
     
     def _parse_top_answers(self, top_answers):
+        cnt = 0
         for as_url in top_answers:
             answer = ZhihuAnswer(as_url)
             if not answer.is_valid():
@@ -120,6 +121,11 @@ class ZhihuCrawler(object):
                     self._save_user(author)
             else:
                 self._anonymous_cnt += 1
+                
+            cnt += 1
+            if ZhihuCommon.debug_fast_crawler and cnt > 10:
+                #如果是快速模式，仅解析前十个问题
+                break
             
 class ZhihuTopic(object):
     def __init__(self, url):
@@ -224,6 +230,8 @@ class ZhihuTopic(object):
         while go_next_page:
             go_next_page = self._parse_top_answer_one_page(page)
             page += 1
+            if ZhihuCommon.debug_fast_crawler and page > 10:
+                break #打开快速模式，仅搜索前十个页面
 
 class ZhihuAnswer(object):
     
@@ -420,6 +428,8 @@ class ZhihuCommon(object):
         'Host': 'www.zhihu.com',
         'DNT': '1'
     }
+    
+    debug_fast_crawler = True #快速模块是否打开，当此模式打开时，不会遍历所有同类的信息，用于调试。
     
     @staticmethod
     def get_and_save_page(url, path):
