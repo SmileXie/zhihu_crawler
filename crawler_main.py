@@ -59,10 +59,9 @@ class ZhihuCrawler(object):
     
     def init_xsrf(self):
         """初始化，获取xsrf"""
-        response = requests.get(self._base_url, headers = ZhihuCommon.my_header)
-        text = response.text
-        self._save_file("pre_page.htm", text, response.encoding)
-        soup = BeautifulSoup(text)
+        #下载线_的解释: it has the special meaning that "I don't need this variable, I'm only putting something
+        # here because the API/syntax/whatever requires it"
+        _, soup = ZhihuCommon.get_page(self._base_url) 
         input_tag = soup.find("input", {"name": "_xsrf"})
         xsrf = input_tag["value"]
         self.xsrf = xsrf
@@ -171,8 +170,7 @@ class ZhihuTopic(object):
     def _parse_topic(self):
         is_ok = False
         try:
-            response = requests.get(self._url, headers = ZhihuCommon.my_header)
-            soup = BeautifulSoup(response.text)
+            _, soup = ZhihuCommon.get_page(self._url) 
             self.soup = soup
             topic_info_tag = soup.find("h1", class_="zm-editable-content")
             self._name = topic_info_tag.contents[0]
@@ -197,13 +195,8 @@ class ZhihuTopic(object):
                         + str(page))
 
         page_url = self._url + r"/top-answers?page=" + str(page) #指定页码
-        try:
-            response = requests.get(page_url, headers = ZhihuCommon.my_header)
-            soup = BeautifulSoup(response.text)
-        except:
-            self._debug_print(DebugLevel.warning, "fail to get page " \
-                         + page_url)  
-            return False
+        
+        _, soup = ZhihuCommon.get_page(page_url) 
 
         #搜索question的url
         for tag in soup.find_all("div", class_="zm-item-rich-text js-collapse-body"):
@@ -257,8 +250,7 @@ class ZhihuAnswer(object):
     def _parse_answer(self):
         is_ok = False
         try:
-            response = requests.get(self._url, headers = ZhihuCommon.my_header)
-            soup = BeautifulSoup(response.text)        
+            _, soup = ZhihuCommon.get_page(self._url)     
             self.soup = soup
             
             #<div id="zh-question-title" data-editable="false">
@@ -360,12 +352,9 @@ class ZhihuUser(object):
         return tmp_dict 
                 
     def _parse_user_page(self):        
-        try:
-            response = requests.get(self._user_url, headers = ZhihuCommon.my_header)
-            #self._save_file("user_page.htm", response.text, response.encoding)
-            self.first_user_page_is_save = True
-            soup = BeautifulSoup(response.text)        
-            self.soup = soup
+        try:      
+            _, soup = ZhihuCommon.get_page(self._user_url)  
+            self.soup = soup   
             #class_即是查找class，因为class是保留字，bs框架做了转化
             name_tag = soup.find("span", class_="name")
             name = name_tag.contents[0]
@@ -429,8 +418,25 @@ class ZhihuCommon(object):
         'DNT': '1'
     }
     
-    debug_fast_crawler = True #快速模块是否打开，当此模式打开时，不会遍历所有同类的信息，用于调试。
+    debug_fast_crawler = False #快速模块是否打开，当此模式打开时，不会遍历所有同类的信息，用于调试。
+    _last_get_page_fail = False #上一次调用get_page是失败的?
     
+    @staticmethod
+    def get_page(url):
+        #上一次get页面失败，暂停10秒
+        if ZhihuCommon._last_get_page_fail:
+            time.sleep(10)
+            
+        try:
+            response = requests.get(url, headers = ZhihuCommon.my_header)
+            soup = BeautifulSoup(response.text)
+            ZhihuCommon._last_get_page_fail = False
+            return response.text, soup
+        except Exception as e:
+            print("fail to get " + url + " error info: " + str(e))
+            ZhihuCommon._last_get_page_fail = True
+            raise #当前函数不知道应该怎么处理该错误，所以，最恰当的方式是继续往上抛，让顶层调用者去处理
+        
     @staticmethod
     def get_and_save_page(url, path):
         try:
