@@ -28,8 +28,7 @@ class ZhihuCrawler(object):
         self._visited_topic_url = set() 
         self._visited_answer_url = set()
         self._anonymous_cnt = 0 #精华回答中的匿名个数
-        pass
-    
+            
     def do_crawler(self):
         self._traverse_topic()
     
@@ -59,12 +58,17 @@ class ZhihuCrawler(object):
     
     def init_xsrf(self):
         """初始化，获取xsrf"""
-        #下载线_的解释: it has the special meaning that "I don't need this variable, I'm only putting something
-        # here because the API/syntax/whatever requires it"
-        _, soup = ZhihuCommon.get_page(self._base_url) 
-        input_tag = soup.find("input", {"name": "_xsrf"})
-        xsrf = input_tag["value"]
-        self.xsrf = xsrf
+        
+        try:
+            #下载线_的解释: it has the special meaning that "I don't need this variable, I'm only putting something
+            # here because the API/syntax/whatever requires it"
+            _, soup = ZhihuCommon.get_page(self._base_url) 
+            input_tag = soup.find("input", {"name": "_xsrf"})
+            xsrf = input_tag["value"]
+            self._xsrf = xsrf
+        except Exception as e:
+            self._debug_print(DebugLevel.error, "fail to init xsrf. " + str(e))
+                
         
     def get_login_page(self):
         """获取登录后的界面，需要先运行init_xsrf"""
@@ -73,7 +77,7 @@ class ZhihuCrawler(object):
             'rememberme': 'y',
             'password': self._password,
             'email': self._email,
-            '_xsrf':self.xsrf    
+            '_xsrf':self._xsrf    
         }
         reponse_login = requests.post(login_url, headers = ZhihuCommon.my_header, data = post_dict)
         self._save_file('login_page.htm', reponse_login.text, reponse_login.encoding)
@@ -196,7 +200,12 @@ class ZhihuTopic(object):
 
         page_url = self._url + r"/top-answers?page=" + str(page) #指定页码
         
-        _, soup = ZhihuCommon.get_page(page_url) 
+        try:
+            _, soup = ZhihuCommon.get_page(page_url) 
+        except Exception as e:
+            self._debug_print(DebugLevel.warning, "fail to get page " + page_url + "errinfo " + str(e))
+            ZhihuCommon.get_and_save_page(page_url, "last_page_in_topic.html")
+            return False
 
         #搜索question的url
         for tag in soup.find_all("div", class_="zm-item-rich-text js-collapse-body"):
@@ -214,6 +223,7 @@ class ZhihuTopic(object):
                 return True
         
         ZhihuCommon.get_and_save_page(page_url, "last_page_in_topic.html")
+        self._debug_print(DebugLevel.verbose, "last page in topic" + page_url)   
         return False
         
     def _parse_top_answer(self):
@@ -418,7 +428,7 @@ class ZhihuCommon(object):
         'DNT': '1'
     }
     
-    debug_fast_crawler = False #快速模块是否打开，当此模式打开时，不会遍历所有同类的信息，用于调试。
+    debug_fast_crawler = True #快速模块是否打开，当此模式打开时，不会遍历所有同类的信息，用于调试。
     _last_get_page_fail = False #上一次调用get_page是失败的?
     
     @staticmethod
@@ -428,7 +438,7 @@ class ZhihuCommon(object):
             time.sleep(10)
             
         try:
-            response = requests.get(url, headers = ZhihuCommon.my_header)
+            response = requests.get(url, headers = ZhihuCommon.my_header, timeout = 30)
             soup = BeautifulSoup(response.text)
             ZhihuCommon._last_get_page_fail = False
             return response.text, soup
