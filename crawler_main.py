@@ -91,16 +91,22 @@ class ZhihuCrawler(object):
             self._visited_topic_url.add(topic.get_url())
             self._save_topic(topic) 
             self._parse_top_answers(topic.get_top_answers())
+            topic.set_level(1)
             help_q.append(topic)
+
         
         while len(help_q) != 0:
-            tmp_topic = help_q.popleft()
-            for topic_url in tmp_topic.get_related_topic():
+            parent_topic = help_q.popleft()
+            if parent_topic.get_level() >= ZhihuCommon.traversal_level_max:
+                #超过遍历深度限制
+                break
+            
+            for topic_url in parent_topic.get_related_topic():
                 if topic_url not in self._visited_topic_url:
                     new_topic = ZhihuTopic(topic_url)
                     if not new_topic.is_valid():
                         continue
-                
+                    new_topic.set_level(parent_topic.get_level() + 1)
                     self._visited_topic_url.add(new_topic.get_url())
                     self._save_topic(new_topic) 
                     self._parse_top_answers(new_topic.get_top_answers())
@@ -152,7 +158,14 @@ class ZhihuTopic(object):
 
     def is_valid(self):
         return self._valid
-
+    
+    #按深度优先遍历，本话题处于第几个层次
+    def set_level(self, level):
+        self.level = level
+    
+    def get_level(self):
+        return self.level
+        
     def get_url(self):
         return self._url
     
@@ -428,7 +441,10 @@ class ZhihuCommon(object):
         'DNT': '1'
     }
     
-    debug_fast_crawler = True #快速模块是否打开，当此模式打开时，不会遍历所有同类的信息，用于调试。
+    """运行参数"""
+    debug_fast_crawler = False #快速模块是否打开，当此模式打开时，不会遍历所有同类的信息，用于调试。
+    traversal_level_max = 2 #深度优化遍历最大层数限制
+    
     _last_get_page_fail = False #上一次调用get_page是失败的?
     
     @staticmethod
