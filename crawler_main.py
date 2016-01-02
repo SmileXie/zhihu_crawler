@@ -42,17 +42,17 @@ class ZhihuCrawler(object):
             fp.write(str_content)
             
     def _save_user(self, user):
-        with open("users_json.txt", "a") as fp:
+        with open(ZhihuCommon.user_json_file, "a") as fp:
             json_str = json.dumps(user, default = ZhihuUser.obj_to_dict, ensure_ascii = False, sort_keys = True)
             fp.write(json_str + "\n")
     
     def _save_answer(self, answer):
-        with open("answer_json.txt", "a") as fp:
+        with open(ZhihuCommon.answer_json_file, "a") as fp:
             json_str = json.dumps(answer, default = ZhihuAnswer.obj_to_dict, ensure_ascii = False, sort_keys = True)
             fp.write(json_str + "\n")
             
     def _save_topic(self, topic):
-        with open("topic_json.txt", "a") as fp:
+        with open(ZhihuCommon.topic_json_file, "a") as fp:
             json_str = json.dumps(topic, default = ZhihuTopic.obj_to_dict, ensure_ascii = False, sort_keys = True)
             fp.write(json_str + "\n")
     
@@ -442,8 +442,11 @@ class ZhihuCommon(object):
     }
     
     """运行参数"""
-    debug_fast_crawler = False #快速模块是否打开，当此模式打开时，不会遍历所有同类的信息，用于调试。
+    debug_fast_crawler = False #快速模式是否打开，当此模式打开时，不会遍历所有同类的信息，用于调试。
     traversal_level_max = 2 #深度优化遍历最大层数限制
+    user_json_file = "user.json"
+    answer_json_file = "answer.json"
+    topic_json_file = "topic.json"
     
     _last_get_page_fail = False #上一次调用get_page是失败的?
     
