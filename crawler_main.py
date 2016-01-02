@@ -310,10 +310,15 @@ class ZhihuAnswer(object):
             else:
                 self._author_name = author_tag.contents[0]
                 self._author_url = self._base_url + author_tag["href"]
+            
+            ans_content_tag = soup.find("div", class_="zm-editable-content clearfix")
+            self._answer_len = 0;
+            for ans_str in ans_content_tag.stripped_strings:
+                self._answer_len += len(ans_str)
 
             self._debug_print(DebugLevel.verbose, "parse " + self._url  + " ok." + " " + self._question + "vote:" \
-                + str(self._votecount) + " author:" + self._author_name)
-                
+                + str(self._votecount) + " author:" + self._author_name + " answer_len: " + str(self._answer_len))
+            
             is_ok = True
         except Exception as e:
             time.sleep(10)
@@ -328,7 +333,8 @@ class ZhihuAnswer(object):
         tmp_dict["question"] = obj._question
         tmp_dict["url"] = obj._url
         tmp_dict["author"] = obj._author_name
-        tmp_dict["votecount"] = obj._votecount;
+        tmp_dict["votecount"] = obj._votecount
+        tmp_dict["answer_len"] = obj._answer_len
         
         return tmp_dict
     
