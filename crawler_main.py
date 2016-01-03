@@ -458,18 +458,23 @@ class ZhihuCommon(object):
     
     @staticmethod
     def get_page(url):
-        #上一次get页面失败，暂停10秒
-        if ZhihuCommon._last_get_page_fail:
-            time.sleep(10)
-            
-        try:
-            response = requests.get(url, headers = ZhihuCommon.my_header, timeout = 30)
-            soup = BeautifulSoup(response.text)
-            ZhihuCommon._last_get_page_fail = False
-            return response.text, soup
-        except Exception as e:
-            print("fail to get " + url + " error info: " + str(e))
-            ZhihuCommon._last_get_page_fail = True
+        try_time = 0
+        
+        while try_time < 5:
+            #上一次get页面失败，暂停10秒
+            if ZhihuCommon._last_get_page_fail:
+                time.sleep(10)
+                
+            try:
+                try_time += 1
+                response = requests.get(url, headers = ZhihuCommon.my_header, timeout = 30)
+                soup = BeautifulSoup(response.text)
+                ZhihuCommon._last_get_page_fail = False
+                return response.text, soup
+            except Exception as e:
+                print("fail to get " + url + " error info: " + str(e) + " try_time " + str(try_time))
+                ZhihuCommon._last_get_page_fail = True
+        else:
             raise #当前函数不知道应该怎么处理该错误，所以，最恰当的方式是继续往上抛，让顶层调用者去处理
         
     @staticmethod
@@ -482,12 +487,91 @@ class ZhihuCommon(object):
         except Exception as e:
             print("fail to get " + url + " error info: " + str(e))
             return
+
+
+class ZhihuAnalyse(object):
+    """基于ZhihuCrawler的结果做分析"""
+    def __init__(self):
+        self._topics = deque()
+        self._answers = deque()
+        self._users = deque()
+                        
+    def _analyse_topic(self):        
+        with open(ZhihuCommon.topic_json_file, "r") as fp:
+            for line in fp.readlines():
+                topic = json.loads(line)
+                self._topics.append(topic)
+    
+    def _analyse_answer(self):
+        with open(ZhihuCommon.answer_json_file, "r") as fp:
+            for line in fp.readlines():
+                answer = json.loads(line)
+                self._answers.append(answer)
+                
+    def _analyse_user(self):
+        with open(ZhihuCommon.user_json_file, "r") as fp:
+            for line in fp.readlines():
+                user = json.loads(line)
+                self._users.append(user)
+    
+    def _analyse_gender(self):
+        self.male_num = 0
+        self.female_num = 0
+        for user in self._users:
+            if user["is_male"]:
+                self.male_num += 1
+            else:
+                self.female_num += 1
+        print("male: " + str(self.male_num) + " female: " + str(self.female_num))
+                
+    
+    def _analyse_votecount_ans_len(self):
+        #答案投票数的分布，每个_votecount_distribution下标跨度为vote_dis_part
+        #答案长度的分布，每个_ans_len_distribution下标跨度为ans_len_dis_part
+        vote_dis_part = 5000
+        ans_len_dis_part = 100
+        self._votecount_distribution = [0]*500
+        self._ans_len_distribution = [0]*500
+        self._max_votecount = 0
+        self._max_ans_len = 0
+        for ans in self._answers:
+            idx = (int)(ans["votecount"] / vote_dis_part)
+            self._votecount_distribution[idx] += 1
+            if ans["votecount"] > self._max_votecount:
+                self._max_votecount = ans["votecount"]
+                
+            idx = (int)(ans["answer_len"] / ans_len_dis_part)
+            self._ans_len_distribution[idx] += 1
+            if ans["answer_len"] > self._max_ans_len:
+                self._max_ans_len = ans["answer_len"]
+                
+        max_idx = (int)(self._max_votecount / vote_dis_part + 1)
+        print("Vote Count:")
+        for idx in range(max_idx):
+            print("    " + str(idx * vote_dis_part) + "~" + str((idx + 1) * vote_dis_part) + ": " 
+                  + str(self._votecount_distribution[idx]))
         
+        max_idx = (int)(self._max_ans_len / ans_len_dis_part + 1)
+        print("Answer Len:")
+        for idx in range(max_idx):
+            print("    " + str(idx * ans_len_dis_part) + "~" + str((idx + 1) * ans_len_dis_part) + ": " 
+                  + str(self._ans_len_distribution[idx]))
+        
+    def do_analyse(self):
+        self._analyse_topic()
+        self._analyse_answer()
+        self._analyse_user()
+        self._analyse_gender()
+        self._analyse_votecount_ans_len()
+        pass
+       
 def main():
     z = ZhihuCrawler()
     z.init_xsrf()
     z.do_crawler()
-
+    za = ZhihuAnalyse()
+    za.do_analyse()
+    
     print("ok\n")
 
 if __name__ == "__main__":    
