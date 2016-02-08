@@ -19,15 +19,16 @@ class DebugLevel(Enum):
 class ZhihuCrawler(object):
     
     def __init__(self):
-        self._base_url = r"http://www.zhihu.com"
+        self._base_url = r"https://www.zhihu.com"
         self._root_topic = r"http://www.zhihu.com/topic/19776749" #知乎的根话题
-        self._email = r"xxxxx"
-        self._password = r"xxxxx"
+        self._email = r"xxxxxxxxxxxx"
+        self._password = r"xxxxxxxxxxxxx"
         self._debug_level = DebugLevel.verbose
         self._visited_user_url = set() #set 查找元素的时间复杂度是O(1)
         self._visited_topic_url = set() 
         self._visited_answer_url = set()
         self._anonymous_cnt = 0 #精华回答中的匿名个数
+        self._session = requests.Session()
             
     def do_crawler(self):
         self._traverse_topic()
@@ -62,7 +63,7 @@ class ZhihuCrawler(object):
         try:
             #下载线_的解释: it has the special meaning that "I don't need this variable, I'm only putting something
             # here because the API/syntax/whatever requires it"
-            _, soup = ZhihuCommon.get_page(self._base_url) 
+            _, soup = ZhihuCommon.get_page(self._session, self._base_url) 
             input_tag = soup.find("input", {"name": "_xsrf"})
             xsrf = input_tag["value"]
             self._xsrf = xsrf
@@ -70,17 +71,30 @@ class ZhihuCrawler(object):
             self._debug_print(DebugLevel.error, "fail to init xsrf. " + str(e))
                 
         
-    def get_login_page(self):
+    def login(self):
         """获取登录后的界面，需要先运行init_xsrf"""
-        login_url = self._base_url + r"/login"
+        login_url = self._base_url + r"/login/email"
         post_dict = {
             'rememberme': 'y',
             'password': self._password,
             'email': self._email,
             '_xsrf':self._xsrf    
         }
-        reponse_login = requests.post(login_url, headers = ZhihuCommon.my_header, data = post_dict)
-        self._save_file('login_page.htm', reponse_login.text, reponse_login.encoding)
+        response_login = self._session.post(login_url, headers = ZhihuCommon.my_header, data = post_dict, verify = False)
+        # response content: {"r":0, "msg": "\u767b\u9646\u6210\u529f" }
+        if response_login.json()["r"] == 0:
+            return True
+        else:
+            return False
+        #self._save_file('login_page.htm', reponse_login.text, reponse_login.encoding)
+
+    def get_child_topic(self, parent):
+        url = "https://www.zhihu.com/topic/" + str(parent) + "/organize/entire"
+        post_dict = {
+            '_xsrf':self._xsrf    
+        }
+        response_login = self._session.get(r"https://www.zhihu.com/", headers = ZhihuCommon.my_header, verify = False)
+        pass
 
     def _traverse_topic(self):
         """广度优先遍历话题，解析各子话题"""
@@ -457,7 +471,7 @@ class ZhihuCommon(object):
     _last_get_page_fail = False #上一次调用get_page是失败的?
     
     @staticmethod
-    def get_page(url):
+    def get_page(session, url):
         try_time = 0
         
         while try_time < 5:
@@ -467,7 +481,7 @@ class ZhihuCommon(object):
                 
             try:
                 try_time += 1
-                response = requests.get(url, headers = ZhihuCommon.my_header, timeout = 30)
+                response = session.get(url, headers = ZhihuCommon.my_header, timeout = 30, verify = False)
                 soup = BeautifulSoup(response.text)
                 ZhihuCommon._last_get_page_fail = False
                 return response.text, soup
@@ -568,9 +582,14 @@ class ZhihuAnalyse(object):
 def main():
     z = ZhihuCrawler()
     z.init_xsrf()
-    z.do_crawler()
-    za = ZhihuAnalyse()
-    za.do_analyse()
+    login_sucess = z.login()
+    if not login_sucess:
+        print("fail to login.")
+        return
+    z.get_child_topic(19776749)
+    #z.do_crawler()    
+    #za = ZhihuAnalyse()
+    #za.do_analyse()
     
     print("ok\n")
 
