@@ -21,8 +21,8 @@ class ZhihuCrawler(object):
     def __init__(self):
         self._base_url = r"https://www.zhihu.com"
         self._root_topic = r"http://www.zhihu.com/topic/19776749" #知乎的根话题
-        self._email = r"xxxxxxxxxxxx"
-        self._password = r"xxxxxxxxxxxxx"
+        self._email = r""
+        self._password = r""
         self._debug_level = DebugLevel.verbose
         self._visited_user_url = set() #set 查找元素的时间复杂度是O(1)
         self._visited_topic_url = set() 
@@ -31,7 +31,9 @@ class ZhihuCrawler(object):
         self._session = requests.Session()
             
     def do_crawler(self):
-        self._traverse_topic()
+        #self._traverse_topic()
+        pass
+        
     
     def _debug_print(self, level, log_str):
         if level.value >= self._debug_level.value:
@@ -89,11 +91,27 @@ class ZhihuCrawler(object):
         #self._save_file('login_page.htm', reponse_login.text, reponse_login.encoding)
 
     def get_child_topic(self, parent):
-        url = "https://www.zhihu.com/topic/" + str(parent) + "/organize/entire"
+        
+        url = r"https://www.zhihu.com/topic/" + str(parent) + r"/organize/entire"
         post_dict = {
             '_xsrf':self._xsrf    
         }
-        response_login = self._session.get(r"https://www.zhihu.com/", headers = ZhihuCommon.my_header, verify = False)
+        response_login = self._session.post(url, headers = ZhihuCommon.my_header, data = post_dict, verify = False) 
+        rep_msg = response_login.json()
+        """ rep_msg structure
+        dict: {'msg': [['topic', '「根话题」', '19776749'], 
+        [[['topic', '生活、艺术、文化与活动', '19778317'], [[['load', '显示子话题', '', '19778317'], []]]], 
+        [['topic', '实体', '19778287'], [[['load', '显示子话题', '', '19778287'], []]]], 
+        [['topic', '产业', '19560891'], [[['load', '显示子话题', '', '19560891'], []]]], 
+        [['topic', '学科', '19618774'], [[['load', '显示子话题', '', '19618774'], []]]],
+         [['topic', '「未归类」话题', '19776751'], [[['load', '显示子话题', '', '19776751'], []]]],
+          [['topic', '「形而上」话题', '19778298'], [[['load', '显示子话题', '', '19778298'], []]]]]], 
+          'r': 0}
+          """
+        if not response_login.json()["r"] == 0:
+            return False
+        child_num = len(response_login.json()["msg"][1])
+        
         pass
 
     def _traverse_topic(self):
@@ -152,7 +170,7 @@ class ZhihuCrawler(object):
             
 class ZhihuTopic(object):
     def __init__(self, url):
-        self._base_url = r"http://www.zhihu.com"
+        self._base_url = r"https://www.zhihu.com"
         self._debug_level = DebugLevel.verbose
         self._url = url
         self._related_topic_urls = []
@@ -266,7 +284,7 @@ class ZhihuTopic(object):
 class ZhihuAnswer(object):
     
     def __init__(self, url):
-        self._base_url = r"http://www.zhihu.com"
+        self._base_url = r"https://www.zhihu.com"
         self._debug_level = DebugLevel.verbose
         self._url = url
         self._valid = self._parse_answer()
@@ -451,6 +469,7 @@ class ZhihuUser(object):
 class ZhihuCommon(object):
     """ZhihuCrawler, ZhihuTopic, ZhihuUser三个类的共用代码, 包含一些服务于debug的函数, 共用的网页获取函数, 等。"""
     
+    root_topic = 19776749
     my_header = {
         'Connection': 'Keep-Alive',
         'Accept': 'text/html, application/xhtml+xml, */*',
@@ -494,14 +513,24 @@ class ZhihuCommon(object):
     @staticmethod
     def get_and_save_page(url, path):
         try:
-            response = requests.get(url, headers = ZhihuCommon.my_header)
+            response = requests.get(url, headers = ZhihuCommon.my_header,  verify = False)
             with codecs.open(path, 'w', response.encoding)  as fp:
                 fp.write(response.text)
             return
         except Exception as e:
             print("fail to get " + url + " error info: " + str(e))
             return
-
+        
+    @staticmethod
+    def get_and_save_page_with_session(session, url, path):
+        try:
+            response = session.get(url, headers = ZhihuCommon.my_header,  verify = False)
+            with codecs.open(path, 'w', response.encoding)  as fp:
+                fp.write(response.text)
+            return
+        except Exception as e:
+            print("fail to get " + url + " error info: " + str(e))
+            return
 
 class ZhihuAnalyse(object):
     """基于ZhihuCrawler的结果做分析"""
@@ -586,7 +615,7 @@ def main():
     if not login_sucess:
         print("fail to login.")
         return
-    z.get_child_topic(19776749)
+    z.get_child_topic(ZhihuCommon.root_topic)
     #z.do_crawler()    
     #za = ZhihuAnalyse()
     #za.do_analyse()
