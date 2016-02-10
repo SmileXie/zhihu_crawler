@@ -79,7 +79,7 @@ class ZhihuCrawler(object):
             'phone_num': self._phone_num,
             '_xsrf':ZhihuCommon.get_xsrf() 
         }
-        response_login = ZhihuCommon.get_session().post(login_url, headers = ZhihuCommon.my_header, data = post_dict, verify = False)
+        response_login = ZhihuCommon.get_session().post(login_url, headers = ZhihuCommon.my_header, data = post_dict)
         # response content: {"r":0, "msg": "\u767b\u9646\u6210\u529f" }
         if response_login.json()["r"] == 0:
             return True
@@ -212,7 +212,7 @@ class ZhihuTopic(object):
         post_dict = {
             '_xsrf':ZhihuCommon.get_xsrf()    
         }
-        response_login = ZhihuCommon.get_session().post(topic_tree_url, headers = ZhihuCommon.my_header, data = post_dict, verify = False) 
+        response_login = ZhihuCommon.get_session().post(topic_tree_url, headers = ZhihuCommon.my_header, data = post_dict) 
         rep_msg = response_login.json()
         
         """ rep_msg structure
@@ -399,7 +399,7 @@ class ZhihuUser(object):
         tmp_dict["url"] = obj._user_url
         tmp_dict["thank_cnt"] = obj._thank_cnt
         tmp_dict["agree_cnt"] = obj._agree_cnt
-        tmp_dict["is_male"] = obj._gender
+        tmp_dict["gender"] = obj._gender
         for key_str in ZhihuUser._extra_info_key:
             if key_str in obj._extra_info:
                 tmp_dict[key_str] = obj._extra_info[key_str]
@@ -514,7 +514,7 @@ class ZhihuCommon(object):
                 
             try:
                 try_time += 1
-                response = ZhihuCommon.get_session().get(url, headers = ZhihuCommon.my_header, timeout = 30, verify = False)
+                response = ZhihuCommon.get_session().get(url, headers = ZhihuCommon.my_header, timeout = 30)
                 soup = BeautifulSoup(response.text)
                 ZhihuCommon._last_get_page_fail = False
                 return response.text, soup
@@ -538,7 +538,7 @@ class ZhihuCommon(object):
     @staticmethod
     def get_and_save_page_with_session(session, url, path):
         try:
-            response = session.get(url, headers = ZhihuCommon.my_header,  verify = False)
+            response = session.get(url, headers = ZhihuCommon.my_header)
             with codecs.open(path, 'w', response.encoding)  as fp:
                 fp.write(response.text)
             return
@@ -630,8 +630,8 @@ def main():
         print("fail to login.")
         return
     z.do_crawler()    
-    za = ZhihuAnalyse()
-    za.do_analyse()
+    #za = ZhihuAnalyse()
+    #za.do_analyse()
     
     print("ok\n")
 
