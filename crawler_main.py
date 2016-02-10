@@ -79,7 +79,7 @@ class ZhihuCrawler(object):
             'phone_num': self._phone_num,
             '_xsrf':ZhihuCommon.get_xsrf() 
         }
-        response_login = ZhihuCommon.get_session().post(login_url, headers = ZhihuCommon.my_header, data = post_dict)
+        response_login = ZhihuCommon.post_page(login_url, post_dict)
         # response content: {"r":0, "msg": "\u767b\u9646\u6210\u529f" }
         if response_login.json()["r"] == 0:
             return True
@@ -212,7 +212,7 @@ class ZhihuTopic(object):
         post_dict = {
             '_xsrf':ZhihuCommon.get_xsrf()    
         }
-        response_login = ZhihuCommon.get_session().post(topic_tree_url, headers = ZhihuCommon.my_header, data = post_dict) 
+        response_login = ZhihuCommon.post_page(topic_tree_url, post_dict) 
         rep_msg = response_login.json()
         
         """ rep_msg structure
@@ -264,7 +264,7 @@ class ZhihuTopic(object):
                 return True
         
         ZhihuCommon.get_and_save_page(page_url, "last_page_in_topic.html")
-        self._debug_print(DebugLevel.verbose, "last page in topic" + page_url)   
+        self._debug_print(DebugLevel.verbose, "last page in topic " + page_url)   
         return False
         
     def _parse_top_answer(self):
@@ -465,7 +465,8 @@ class ZhihuUser(object):
 class ZhihuCommon(object):
     """ZhihuCrawler, ZhihuTopic, ZhihuUser三个类的共用代码, 包含一些服务于debug的函数, 共用的网页获取函数, 等。"""
     
-    root_topic = 19776749 #
+    root_topic = 19776751 # 19776749 根话题  19776751 未归类 
+    unclassed_topic = 19776751
     my_header = {
         'Connection': 'Keep-Alive',
         'Accept': 'text/html, application/xhtml+xml, */*',
@@ -523,22 +524,31 @@ class ZhihuCommon(object):
                 ZhihuCommon._last_get_page_fail = True
         else:
             raise #当前函数不知道应该怎么处理该错误，所以，最恰当的方式是继续往上抛，让顶层调用者去处理
+    
+    @staticmethod
+    def post_page(url, post_dict):
+        try_time = 0
+        
+        while try_time < 5:
+            #上一次get页面失败，暂停10秒
+            if ZhihuCommon._last_get_page_fail:
+                time.sleep(10)
+                
+            try:
+                try_time += 1
+                response = ZhihuCommon.get_session().post(url, headers = ZhihuCommon.my_header, data = post_dict, timeout = 30)
+                ZhihuCommon._last_get_page_fail = False
+                return response
+            except Exception as e:
+                print("fail to get " + url + " error info: " + str(e) + " try_time " + str(try_time))
+                ZhihuCommon._last_get_page_fail = True
+        else:
+            raise #当前函
         
     @staticmethod
     def get_and_save_page(url, path):
         try:
-            response = requests.get(url, headers = ZhihuCommon.my_header,  verify = False)
-            with codecs.open(path, 'w', response.encoding)  as fp:
-                fp.write(response.text)
-            return
-        except Exception as e:
-            print("fail to get " + url + " error info: " + str(e))
-            return
-        
-    @staticmethod
-    def get_and_save_page_with_session(session, url, path):
-        try:
-            response = session.get(url, headers = ZhihuCommon.my_header)
+            response = ZhihuCommon.get_session().get(url, headers = ZhihuCommon.my_header,  verify = False)
             with codecs.open(path, 'w', response.encoding)  as fp:
                 fp.write(response.text)
             return
