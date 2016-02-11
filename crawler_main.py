@@ -42,17 +42,17 @@ class ZhihuCrawler(object):
             fp.write(str_content)
             
     def _save_user(self, user):
-        with open(ZhihuCommon.user_json_file, "a") as fp:
+        with open(ZhihuCommon.user_json_file, "a", encoding = "utf-8") as fp:
             json_str = json.dumps(user, default = ZhihuUser.obj_to_dict, ensure_ascii = False, sort_keys = True)
             fp.write(json_str + "\n")
     
     def _save_answer(self, answer):
-        with open(ZhihuCommon.answer_json_file, "a") as fp:
+        with open(ZhihuCommon.answer_json_file, "a", encoding = "utf-8") as fp:
             json_str = json.dumps(answer, default = ZhihuAnswer.obj_to_dict, ensure_ascii = False, sort_keys = True)
             fp.write(json_str + "\n")
             
     def _save_topic(self, topic):
-        with open(ZhihuCommon.topic_json_file, "a") as fp:
+        with open(ZhihuCommon.topic_json_file, "a", encoding = "utf-8") as fp:
             json_str = json.dumps(topic, default = ZhihuTopic.obj_to_dict, ensure_ascii = False, sort_keys = True)
             fp.write(json_str + "\n")
     
@@ -62,7 +62,7 @@ class ZhihuCrawler(object):
         try:
             #下载线_的解释: it has the special meaning that "I don't need this variable, I'm only putting something
             # here because the API/syntax/whatever requires it"
-            _, soup = ZhihuCommon.get_page(self._base_url) 
+            _, soup = ZhihuCommon.get(self._base_url) 
             input_tag = soup.find("input", {"name": "_xsrf"})
             xsrf = input_tag["value"]
             ZhihuCommon.set_xsrf(xsrf)
@@ -79,7 +79,7 @@ class ZhihuCrawler(object):
             'phone_num': self._phone_num,
             '_xsrf':ZhihuCommon.get_xsrf() 
         }
-        response_login = ZhihuCommon.post_page(login_url, post_dict)
+        response_login = ZhihuCommon.post(login_url, post_dict)
         # response content: {"r":0, "msg": "\u767b\u9646\u6210\u529f" }
         if response_login.json()["r"] == 0:
             return True
@@ -151,13 +151,16 @@ class ZhihuTopic(object):
         self._url = url
         self._child_topic_id = []
         self._top_answer_urls = []
+        if topic_id == ZhihuCommon.unclassed_topic: #未分类话题，多是话题别名，不作考虑
+            self._valid = False
+            self._debug_print(DebugLevel.verbose, "Skip unclassed topic.")
+            return        
         self._valid = self._parse_topic()
         if self._valid:
             self._parse_child_topic()
             self._parse_top_answer()
             self._debug_print(DebugLevel.verbose, "find " + str(len(self._top_answer_urls)) + " answers") 
             self._debug_print(DebugLevel.verbose, "parse " + url + ". topic " + self._name + " OK!")
-        pass
 
     def _debug_print(self, level, log_str):
         if level.value >= self._debug_level.value:
@@ -195,7 +198,7 @@ class ZhihuTopic(object):
     def _parse_topic(self):
         is_ok = False
         try:
-            _, soup = ZhihuCommon.get_page(self._url) 
+            _, soup = ZhihuCommon.get(self._url) 
             self.soup = soup
             topic_info_tag = soup.find("h1", class_="zm-editable-content")
             self._name = topic_info_tag.contents[0]
@@ -208,30 +211,46 @@ class ZhihuTopic(object):
     
     def _parse_child_topic(self):        
         
-        topic_tree_url = r"https://www.zhihu.com/topic/" + str(self._topic_id) + r"/organize/entire"
+        continue_load = True
+        first_query = True
+        
+        topic_tree_url = r"https://www.zhihu.com/topic/" + str(self._topic_id) + r"/organize/entire"        
         post_dict = {
             '_xsrf':ZhihuCommon.get_xsrf()    
         }
-        response_login = ZhihuCommon.post_page(topic_tree_url, post_dict) 
-        rep_msg = response_login.json()
         
-        """ rep_msg structure
-        dict: {'msg': [['topic', '「根话题」', '19776749'], 
-        [[['topic', '生活、艺术、文化与活动', '19778317'], [[['load', '显示子话题', '', '19778317'], []]]], 
-        [['topic', '实体', '19778287'], [[['load', '显示子话题', '', '19778287'], []]]], 
-        [['topic', '产业', '19560891'], [[['load', '显示子话题', '', '19560891'], []]]], 
-        [['topic', '学科', '19618774'], [[['load', '显示子话题', '', '19618774'], []]]],
-         [['topic', '「未归类」话题', '19776751'], [[['load', '显示子话题', '', '19776751'], []]]],
-          [['topic', '「形而上」话题', '19778298'], [[['load', '显示子话题', '', '19778298'], []]]]]], 
-          'r': 0}
-          """
-        if not response_login.json()["r"] == 0:
-            return False
-        
-        """解析子话题"""
-        for tmp_topic in rep_msg["msg"][1]:
-            topic_id = tmp_topic[0][2]
-            self._child_topic_id.append(topic_id)
+        while continue_load:
+            if first_query:
+                query_url = topic_tree_url
+                first_query = False
+            else:
+                query_url = topic_tree_url + r"?child=" + last_topic + r"&parent=" + parent_topic
+            response_login = ZhihuCommon.post(query_url, post_dict) 
+            rep_msg = response_login.json()
+            
+            """ rep_msg structure
+            dict: {'msg': [['topic', '「根话题」', '19776749'], 
+            [[['topic', '生活、艺术、文化与活动', '19778317'], [[['load', '显示子话题', '', '19778317'], []]]], 
+            [['topic', '实体', '19778287'], [[['load', '显示子话题', '', '19778287'], []]]], 
+            [['topic', '产业', '19560891'], [[['load', '显示子话题', '', '19560891'], []]]], 
+            [['topic', '学科', '19618774'], [[['load', '显示子话题', '', '19618774'], []]]],
+             [['topic', '「未归类」话题', '19776751'], [[['load', '显示子话题', '', '19776751'], []]]],
+              [['topic', '「形而上」话题', '19778298'], [[['load', '显示子话题', '', '19778298'], []]]]]], 
+              'r': 0}
+              """
+            if not response_login.json()["r"] == 0:
+                return
+
+            """解析子话题"""
+            for tmp_topic in rep_msg["msg"][1]:
+                if tmp_topic[0][1] == "加载更多":
+                    last_topic = tmp_topic[0][2]
+                    parent_topic = tmp_topic[0][3]
+                    break
+                topic_id = int(tmp_topic[0][2])
+                self._child_topic_id.append(topic_id)
+            else:
+                continue_load = False # 没有"加载更多", 不再加载
 
     def _parse_top_answer_one_page(self, page):
         """解析一个精华回答页面，返回值:是否还有下一页"""
@@ -242,7 +261,7 @@ class ZhihuTopic(object):
         page_url = self._url + r"/top-answers?page=" + str(page) #指定页码
         
         try:
-            _, soup = ZhihuCommon.get_page(page_url) 
+            _, soup = ZhihuCommon.get(page_url) 
         except Exception as e:
             self._debug_print(DebugLevel.warning, "fail to get page " + page_url + "errinfo " + str(e))
             ZhihuCommon.get_and_save_page(page_url, "last_page_in_topic.html")
@@ -301,7 +320,7 @@ class ZhihuAnswer(object):
     def _parse_answer(self):
         is_ok = False
         try:
-            _, soup = ZhihuCommon.get_page(self._url)     
+            _, soup = ZhihuCommon.get(self._url)     
             self.soup = soup
             
             #<div id="zh-question-title" data-editable="false">
@@ -410,7 +429,7 @@ class ZhihuUser(object):
                 
     def _parse_user_page(self):        
         try:      
-            _, soup = ZhihuCommon.get_page(self._user_url)  
+            _, soup = ZhihuCommon.get(self._user_url)  
             self.soup = soup   
             #class_即是查找class，因为class是保留字，bs框架做了转化
             head_tag = soup.find("div", class_="zm-profile-header")
@@ -465,7 +484,7 @@ class ZhihuUser(object):
 class ZhihuCommon(object):
     """ZhihuCrawler, ZhihuTopic, ZhihuUser三个类的共用代码, 包含一些服务于debug的函数, 共用的网页获取函数, 等。"""
     
-    root_topic = 19776751 # 19776749 根话题  19776751 未归类 
+    root_topic = 19776749 # 19776749 根话题  19776751 未归类  19778298 形而上 
     unclassed_topic = 19776751
     my_header = {
         'Connection': 'Keep-Alive',
@@ -478,7 +497,7 @@ class ZhihuCommon(object):
     }
     
     """运行参数"""
-    debug_fast_crawler = True #快速模式是否打开，当此模式打开时，不会遍历所有同类的信息，用于调试。
+    debug_fast_crawler = False #快速模式是否打开，当此模式打开时，不会遍历所有同类的信息，用于调试。
     traversal_level_max = 2 #深度优化遍历最大层数限制
     user_json_file = "user.json"
     answer_json_file = "answer.json"
@@ -505,7 +524,7 @@ class ZhihuCommon(object):
         return ZhihuCommon._session
     
     @staticmethod
-    def get_page(url):
+    def get(url):
         try_time = 0
         
         while try_time < 5:
@@ -516,6 +535,7 @@ class ZhihuCommon(object):
             try:
                 try_time += 1
                 response = ZhihuCommon.get_session().get(url, headers = ZhihuCommon.my_header, timeout = 30)
+                #, cert = 'F:\Programs\Class-3-Public-Primary-Certification-Authority.pem')
                 soup = BeautifulSoup(response.text)
                 ZhihuCommon._last_get_page_fail = False
                 return response.text, soup
@@ -526,7 +546,7 @@ class ZhihuCommon(object):
             raise #当前函数不知道应该怎么处理该错误，所以，最恰当的方式是继续往上抛，让顶层调用者去处理
     
     @staticmethod
-    def post_page(url, post_dict):
+    def post(url, post_dict):
         try_time = 0
         
         while try_time < 5:
@@ -537,13 +557,14 @@ class ZhihuCommon(object):
             try:
                 try_time += 1
                 response = ZhihuCommon.get_session().post(url, headers = ZhihuCommon.my_header, data = post_dict, timeout = 30)
+                #, cert = 'F:\Programs\Class-3-Public-Primary-Certification-Authority.pem')
                 ZhihuCommon._last_get_page_fail = False
                 return response
             except Exception as e:
-                print("fail to get " + url + " error info: " + str(e) + " try_time " + str(try_time))
+                print("fail to post " + url + " error info: " + str(e) + " try_time " + str(try_time))
                 ZhihuCommon._last_get_page_fail = True
         else:
-            raise #当前函
+            raise #当前函数不知道应该怎么处理该错误，所以，最恰当的方式是继续往上抛，让顶层调用者去处理
         
     @staticmethod
     def get_and_save_page(url, path):
@@ -584,12 +605,15 @@ class ZhihuAnalyse(object):
     def _analyse_gender(self):
         self.male_num = 0
         self.female_num = 0
+        self.unknow_gender = 0
         for user in self._users:
-            if user["is_male"]:
+            if user["gender"] == "Male":
                 self.male_num += 1
-            else:
+            elif user["gender"] == "Female":
                 self.female_num += 1
-        print("male: " + str(self.male_num) + " female: " + str(self.female_num))
+            else:
+                self.unknow_gender += 1
+        print("male: " + str(self.male_num) + " female: " + str(self.female_num) + "unknow_gender: " + str(self.unknow_gender))
                 
     
     def _analyse_votecount_ans_len(self):
