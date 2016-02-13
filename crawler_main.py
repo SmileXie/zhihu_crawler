@@ -121,13 +121,15 @@ class ZhihuCrawler(object):
     def _parse_top_answers(self, top_answers):
         cnt = 0
         for as_url in top_answers:
+            if as_url in self._visited_answer_url:
+                continue
+            
             answer = ZhihuAnswer(as_url)
             if not answer.is_valid():
                 continue
-            
-            if as_url not in self._visited_answer_url:
-                self._visited_answer_url.add(as_url)
-                self._save_answer(answer)
+
+            self._visited_answer_url.add(as_url)
+            self._save_answer(answer)
             
             if (answer.get_author_url() is not None) and (answer.get_author_url() not in self._visited_user_url):
                 author = ZhihuUser(answer.get_author_url())
