@@ -6,7 +6,7 @@
 * 收集范围：知乎各话题下的精华回答。
 * 爬虫算法：
   * 以[根话题的话题树](https://www.zhihu.com/topic/19776749/organize/entire)为启始，按广度优先遍历各子话题，深度为3。
-![image](https://github.com/SmileXie/zhihu_crawler/edit/master/images/topic_tree.png)
+![目录树](https://raw.githubusercontent.com/SmileXie/zhihu_crawler/master/images/topic_tree.png)
   * 各话题下的精华回答，按页遍历，例如从 https://www.zhihu.com/topic/19776749/top-answers?page=1
 遍历到
 https://www.zhihu.com/topic/19776749/top-answers?page=50
