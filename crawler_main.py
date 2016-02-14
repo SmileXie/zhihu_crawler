@@ -500,7 +500,7 @@ class ZhihuCommon(object):
     
     """运行参数"""
     debug_fast_crawler = False #快速模式是否打开，当此模式打开时，不会遍历所有同类的信息，用于调试。
-    traversal_level_max = 2 #深度优化遍历最大层数限制
+    traversal_level_max = 3 #深度优化遍历最大层数限制
     user_json_file = "user.json"
     answer_json_file = "answer.json"
     topic_json_file = "topic.json"
