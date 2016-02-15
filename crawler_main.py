@@ -615,40 +615,60 @@ class ZhihuAnalyse(object):
                 self.female_num += 1
             else:
                 self.unknow_gender += 1
-        print("male: " + str(self.male_num) + " female: " + str(self.female_num) + "unknow_gender: " + str(self.unknow_gender))
+        print("male: " + str(self.male_num) + " female: " + str(self.female_num) + 
+            " unknow_gender: " + str(self.unknow_gender))
                 
     
     def _analyse_votecount_ans_len(self):
         #答案投票数的分布，每个_votecount_distribution下标跨度为vote_dis_part
         #答案长度的分布，每个_ans_len_distribution下标跨度为ans_len_dis_part
+        #下标个数为part_num
         vote_dis_part = 5000
         ans_len_dis_part = 100
-        self._votecount_distribution = [0]*500
-        self._ans_len_distribution = [0]*500
+        part_num = 500
+        self._votecount_distribution = [0] * part_num
+        self._ans_len_distribution = [0] * part_num
         self._max_votecount = 0
         self._max_ans_len = 0
         for ans in self._answers:
             idx = (int)(ans["votecount"] / vote_dis_part)
+            if idx >= part_num:
+                idx = part_num - 1
             self._votecount_distribution[idx] += 1
             if ans["votecount"] > self._max_votecount:
                 self._max_votecount = ans["votecount"]
                 
             idx = (int)(ans["answer_len"] / ans_len_dis_part)
+            if idx >= part_num:
+                idx = part_num - 1
             self._ans_len_distribution[idx] += 1
             if ans["answer_len"] > self._max_ans_len:
                 self._max_ans_len = ans["answer_len"]
                 
         max_idx = (int)(self._max_votecount / vote_dis_part + 1)
+        if max_idx >= part_num:
+            max_idx = part_num - 1
         print("Vote Count:")
-        for idx in range(max_idx):
-            print("    " + str(idx * vote_dis_part) + "~" + str((idx + 1) * vote_dis_part) + ": " 
-                  + str(self._votecount_distribution[idx]))
+        for idx in range(max_idx + 1):
+            if idx == part_num - 1:
+                print("    More than " + str(idx * vote_dis_part) + ": " 
+                      + str(self._votecount_distribution[idx]))
+            else:
+                print("    " + str(idx * vote_dis_part) + "~" + str((idx + 1) * vote_dis_part) + ": " 
+                      + str(self._votecount_distribution[idx]))
         
         max_idx = (int)(self._max_ans_len / ans_len_dis_part + 1)
+        if max_idx >= part_num:
+            max_idx = part_num - 1
         print("Answer Len:")
-        for idx in range(max_idx):
-            print("    " + str(idx * ans_len_dis_part) + "~" + str((idx + 1) * ans_len_dis_part) + ": " 
-                  + str(self._ans_len_distribution[idx]))
+        for idx in range(max_idx + 1):
+            if idx == part_num - 1:
+                print("    More than " + str(idx * ans_len_dis_part) + ": " 
+                      + str(self._ans_len_distribution[idx]))
+
+            else:
+                print("    " + str(idx * ans_len_dis_part) + "~" + str((idx + 1) * ans_len_dis_part) + ": " 
+                      + str(self._ans_len_distribution[idx]))
         
     def do_analyse(self):
         self._analyse_topic()
@@ -665,12 +685,12 @@ def main():
     if not login_sucess:
         print("fail to login.")
         return
-    z.do_crawler()    
-    #za = ZhihuAnalyse()
-    #za.do_analyse()
+    z.do_crawler() 
+    za = ZhihuAnalyse()
+    za.do_analyse()
     
     print("ok\n")
 
 if __name__ == "__main__":    
     main()
-    
+      
