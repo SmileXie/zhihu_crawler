@@ -597,6 +597,14 @@ class ZhihuAnalyse(object):
             for line in fp.readlines():
                 answer = json.loads(line)
                 self._answers.append(answer)
+
+        self.anonymous_cnt = 0
+        for answer in self._answers:
+            if answer["author"] == "匿名用户":
+                self.anonymous_cnt += 1
+        print("anonymous author num:" + str(self.anonymous_cnt))
+        print("Answer num: " + str(len(self._answers)))
+                
                 
     def _analyse_user(self):
         with open(ZhihuCommon.user_json_file, "r") as fp:
@@ -604,10 +612,11 @@ class ZhihuAnalyse(object):
                 user = json.loads(line)
                 self._users.append(user)
     
-    def _analyse_gender(self):
         self.male_num = 0
         self.female_num = 0
         self.unknow_gender = 0
+        self.user_edu = {}
+        self.user_edu_major = {}
         for user in self._users:
             if user["gender"] == "Male":
                 self.male_num += 1
@@ -615,16 +624,37 @@ class ZhihuAnalyse(object):
                 self.female_num += 1
             else:
                 self.unknow_gender += 1
+
+            edu_item = user["education item"]
+            if edu_item != "":
+                if edu_item in self.user_edu.keys():
+                    self.user_edu[edu_item] += 1
+                else:
+                    self.user_edu[edu_item] = 1
+
+            edu_major = user["education-extra item"]
+            if edu_major != "":
+                if edu_major in self.user_edu_major:
+                    self.user_edu_major[edu_major] += 1
+                else:
+                    self.user_edu_major[edu_major] = 1
+                    
         print("male: " + str(self.male_num) + " female: " + str(self.female_num) + 
             " unknow_gender: " + str(self.unknow_gender))
-                
+
+        #对self.user_edu按数量排序, ele[1]即是数值，ele[0]是key
+        sorted_user_edu = sorted(self.user_edu.items(), key = lambda ele:ele[1], reverse = True)
+        print("edu info: " + str(sorted_user_edu))
+        #对self.user_edu_major按数量排序
+        sorted_user_major = sorted(self.user_edu_major.items(), key = lambda ele:ele[1], reverse = True)
+        print("edu major: " + str(sorted_user_major))    
     
     def _analyse_votecount_ans_len(self):
         #答案投票数的分布，每个_votecount_distribution下标跨度为vote_dis_part
         #答案长度的分布，每个_ans_len_distribution下标跨度为ans_len_dis_part
         #下标个数为part_num
         vote_dis_part = 5000
-        ans_len_dis_part = 100
+        ans_len_dis_part = 10000
         part_num = 500
         self._votecount_distribution = [0] * part_num
         self._ans_len_distribution = [0] * part_num
@@ -654,9 +684,11 @@ class ZhihuAnalyse(object):
                 print("    More than " + str(idx * vote_dis_part) + ": " 
                       + str(self._votecount_distribution[idx]))
             else:
-                print("    " + str(idx * vote_dis_part) + "~" + str((idx + 1) * vote_dis_part) + ": " 
+                print("    " + str(idx * vote_dis_part) + "~" + str((idx + 1) * vote_dis_part - 1) + ": " 
                       + str(self._votecount_distribution[idx]))
-        
+
+        print("Max vote count " + str(self._max_votecount))
+                
         max_idx = (int)(self._max_ans_len / ans_len_dis_part + 1)
         if max_idx >= part_num:
             max_idx = part_num - 1
@@ -667,14 +699,15 @@ class ZhihuAnalyse(object):
                       + str(self._ans_len_distribution[idx]))
 
             else:
-                print("    " + str(idx * ans_len_dis_part) + "~" + str((idx + 1) * ans_len_dis_part) + ": " 
+                print("    " + str(idx * ans_len_dis_part) + "~" + str((idx + 1) * ans_len_dis_part - 1) + ": " 
                       + str(self._ans_len_distribution[idx]))
-        
+
+        print("Max answer len " + str(self._max_ans_len))
+                
     def do_analyse(self):
         self._analyse_topic()
         self._analyse_answer()
         self._analyse_user()
-        self._analyse_gender()
         self._analyse_votecount_ans_len()
         pass
        
