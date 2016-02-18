@@ -26,7 +26,6 @@ class ZhihuCrawler(object):
         self._visited_user_url = set() #set 查找元素的时间复杂度是O(1)
         self._visited_topic_url = set() 
         self._visited_answer_url = set()
-        self._anonymous_cnt = 0 #精华回答中的匿名个数
         ZhihuCommon.session_init()
             
     def do_crawler(self):
@@ -136,8 +135,6 @@ class ZhihuCrawler(object):
                 if author.is_valid():
                     self._visited_user_url.add(author.get_url())
                     self._save_user(author)
-            else:
-                self._anonymous_cnt += 1
                 
             cnt += 1
             if ZhihuCommon.debug_fast_crawler and cnt > 10:
@@ -587,13 +584,13 @@ class ZhihuAnalyse(object):
         self._users = deque()
                         
     def _analyse_topic(self):        
-        with open(ZhihuCommon.topic_json_file, "r") as fp:
+        with open(ZhihuCommon.topic_json_file, "r", encoding = "utf-8") as fp:
             for line in fp.readlines():
                 topic = json.loads(line)
                 self._topics.append(topic)
     
     def _analyse_answer(self):
-        with open(ZhihuCommon.answer_json_file, "r") as fp:
+        with open(ZhihuCommon.answer_json_file, "r", encoding = "utf-8") as fp:
             for line in fp.readlines():
                 answer = json.loads(line)
                 self._answers.append(answer)
@@ -607,7 +604,7 @@ class ZhihuAnalyse(object):
                 
                 
     def _analyse_user(self):
-        with open(ZhihuCommon.user_json_file, "r") as fp:
+        with open(ZhihuCommon.user_json_file, "r", encoding = "utf-8") as fp:
             for line in fp.readlines():
                 user = json.loads(line)
                 self._users.append(user)
@@ -617,6 +614,7 @@ class ZhihuAnalyse(object):
         self.unknow_gender = 0
         self.user_edu = {}
         self.user_edu_major = {}
+        self.user_employ = {}
         for user in self._users:
             if user["gender"] == "Male":
                 self.male_num += 1
@@ -639,6 +637,13 @@ class ZhihuAnalyse(object):
                 else:
                     self.user_edu_major[edu_major] = 1
                     
+            employ = user["employment item"]
+            if employ != "":
+                if employ in self.user_employ:
+                    self.user_employ[employ] += 1
+                else:
+                    self.user_employ[employ] = 1
+                    
         print("male: " + str(self.male_num) + " female: " + str(self.female_num) + 
             " unknow_gender: " + str(self.unknow_gender))
 
@@ -648,6 +653,9 @@ class ZhihuAnalyse(object):
         #对self.user_edu_major按数量排序
         sorted_user_major = sorted(self.user_edu_major.items(), key = lambda ele:ele[1], reverse = True)
         print("edu major: " + str(sorted_user_major))    
+        #对self.user_employ按数量排序
+        sorted_user_employ = sorted(self.user_employ.items(), key = lambda ele:ele[1], reverse = True)
+        print("employ: " + str(sorted_user_employ))    
     
     def _analyse_votecount_ans_len(self):
         #答案投票数的分布，每个_votecount_distribution下标跨度为vote_dis_part
