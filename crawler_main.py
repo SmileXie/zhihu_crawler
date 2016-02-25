@@ -20,8 +20,12 @@ class ZhihuCrawler(object):
     
     def __init__(self):
         self._base_url = r"https://www.zhihu.com"
-        self._phone_num = r""
-        self._password = r""
+        self._login_info = {
+            'by'        : r"email", # 'phone_num' or 'email'
+            'phone_num' : r"",
+            'email'     : r"",
+            'password'  : r"",
+        }
         self._debug_level = DebugLevel.verbose
         self._visited_user_url = set() #set 查找元素的时间复杂度是O(1)
         self._visited_topic_url = set() 
@@ -71,13 +75,12 @@ class ZhihuCrawler(object):
         
     def login(self):
         """获取登录后的界面，需要先运行init_xsrf"""
-        login_url = self._base_url + r"/login/phone_num"
         post_dict = {
-            'rememberme': 'y',
-            'password': self._password,
-            'phone_num': self._phone_num,
+            'remember_me': 'true',
             '_xsrf':ZhihuCommon.get_xsrf() 
         }
+        post_dict.update(self._login_info)
+        login_url = self._base_url + r"/login/" + self._login_info['by']
         response_login = ZhihuCommon.post(login_url, post_dict)
         # response content: {"r":0, "msg": "\u767b\u9646\u6210\u529f" }
         if response_login.json()["r"] == 0:
@@ -535,7 +538,7 @@ class ZhihuCommon(object):
                 try_time += 1
                 response = ZhihuCommon.get_session().get(url, headers = ZhihuCommon.my_header, timeout = 30)
                 #, cert = 'F:\Programs\Class-3-Public-Primary-Certification-Authority.pem')
-                soup = BeautifulSoup(response.text)
+                soup = BeautifulSoup(response.text, "html.parser")
                 ZhihuCommon._last_get_page_fail = False
                 return response.text, soup
             except Exception as e:
