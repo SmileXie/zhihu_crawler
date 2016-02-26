@@ -20,13 +20,11 @@ class ZhihuCrawler(object):
     
     def __init__(self):
         self._base_url = r"https://www.zhihu.com"
-        self._login_info = {
-            'by'        : r"email", # 'phone_num' or 'email'
-            'phone_num' : r"",
-            'email'     : r"",
-            'password'  : r"",
-        }
+
+        self._account  = r"" # 'phone number' or 'email'
+        self._password = r""
         self._debug_level = DebugLevel.verbose
+
         self._visited_user_url = set() #set 查找元素的时间复杂度是O(1)
         self._visited_topic_url = set() 
         self._visited_answer_url = set()
@@ -71,16 +69,21 @@ class ZhihuCrawler(object):
             ZhihuCommon.set_xsrf(xsrf)
         except Exception as e:
             self._debug_print(DebugLevel.error, "fail to init xsrf. " + str(e))
-                
-        
+
+
     def login(self):
         """获取登录后的界面，需要先运行init_xsrf"""
+
+        login_by = 'email' if '@' in self._account else 'phone_num'
+        login_url = self._base_url + r"/login/" + login_by
+
         post_dict = {
             'remember_me': 'true',
-            '_xsrf':ZhihuCommon.get_xsrf() 
+            'password': self._password,
+            '_xsrf': ZhihuCommon.get_xsrf(),
         }
-        post_dict.update(self._login_info)
-        login_url = self._base_url + r"/login/" + self._login_info['by']
+        post_dict.update({login_by: self._account})
+
         response_login = ZhihuCommon.post(login_url, post_dict)
         # response content: {"r":0, "msg": "\u767b\u9646\u6210\u529f" }
         if response_login.json()["r"] == 0:
@@ -421,6 +424,7 @@ class ZhihuUser(object):
         tmp_dict["thank_cnt"] = obj._thank_cnt
         tmp_dict["agree_cnt"] = obj._agree_cnt
         tmp_dict["gender"] = obj._gender
+        tmp_dict["agree_cnt"] = obj._location
         for key_str in ZhihuUser._extra_info_key:
             if key_str in obj._extra_info:
                 tmp_dict[key_str] = obj._extra_info[key_str]
@@ -444,6 +448,9 @@ class ZhihuUser(object):
             gender_tag = head_tag.find("span", class_="item gender")
             #gender_tag.cont...nts[0]["class"]是一个list，list的每一个元素是字符串
             gender_str = gender_tag.contents[0]["class"][1]
+            location_tag = head_tag.find("span", class_="item location")
+            location_str = location_tag.contents[0]
+
             if gender_str.find("female") > 0:
                 self._gender = "Female"
             elif gender_str.find("male") > 0:
@@ -453,6 +460,7 @@ class ZhihuUser(object):
             self._name = name
             self._thank_cnt = int(thank_cnt)
             self._agree_cnt = int(agree_cnt)
+            self._location = location_str
             is_ok = True
             self._debug_print(DebugLevel.verbose, "parse " + self._user_url + " ok. " + "name:" + self._name)
         except Exception as e:
