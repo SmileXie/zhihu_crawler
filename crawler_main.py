@@ -434,7 +434,7 @@ class ZhihuUser(object):
         tmp_dict["thank_cnt"] = obj._thank_cnt
         tmp_dict["agree_cnt"] = obj._agree_cnt
         tmp_dict["gender"] = obj._gender
-        tmp_dict["agree_cnt"] = obj._location
+        tmp_dict["location"] = obj._location
         for key_str in ZhihuUser._extra_info_key:
             if key_str in obj._extra_info:
                 tmp_dict[key_str] = obj._extra_info[key_str]
