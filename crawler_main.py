@@ -28,8 +28,8 @@ class ZhihuCrawler(object):
         ZhihuCommon.session_init()
 
     def _load_config(self):
-        struct = {"account": r"", "password": r""}
-
+        struct = {"account": r"", "password": r"",
+                    "Note": "account can be 'email' or 'phone number'"}
         try:
             with open(ZhihuCommon.config_json_file, "r", encoding = "utf-8") as fp:
                 config = json.loads(fp.read())
@@ -83,6 +83,9 @@ class ZhihuCrawler(object):
 
     def login(self):
         """获取登录后的界面，需要先运行init_xsrf"""
+
+        if not len(self._config["account"]):
+            print("Please fill config.json with your account.")
 
         login_by = 'email' if '@' in self._config["account"] else 'phone_num'
         login_url = self._base_url + r"/login/" + login_by
