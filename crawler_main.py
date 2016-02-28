@@ -1,6 +1,8 @@
 """
 Zhihu Crawler 
 Author: smilexie1113@gmail.com
+
+Build in Python 3, Not compatible with Python 2
 """
 import requests
 import codecs 
