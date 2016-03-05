@@ -1,6 +1,8 @@
 """
 Zhihu Crawler 
 Author: smilexie1113@gmail.com
+
+Build in Python 3, Not compatible with Python 2
 """
 import requests
 import codecs 
@@ -20,14 +22,26 @@ class ZhihuCrawler(object):
     
     def __init__(self):
         self._base_url = r"https://www.zhihu.com"
-        self._phone_num = r""
-        self._password = r""
+        self._config = self._load_config()
         self._debug_level = DebugLevel.verbose
         self._visited_user_url = set() #set 查找元素的时间复杂度是O(1)
         self._visited_topic_url = set() 
         self._visited_answer_url = set()
         ZhihuCommon.session_init()
-            
+
+    def _load_config(self):
+        struct = {"account": r"", "password": r"",
+                    "Note": "account can be 'email' or 'phone number'"}
+        try:
+            with open(ZhihuCommon.config_json_file, "r", encoding = "utf-8") as fp:
+                config = json.loads(fp.read())
+                struct.update(config)
+        except Exception as e:
+            with open(ZhihuCommon.config_json_file, "w+", encoding = "utf-8") as fp:
+                fp.write(json.dumps(struct, indent=4))
+        finally:
+            return struct
+
     def do_crawler(self):
         self._traverse_topic() 
     
@@ -67,23 +81,27 @@ class ZhihuCrawler(object):
             ZhihuCommon.set_xsrf(xsrf)
         except Exception as e:
             self._debug_print(DebugLevel.error, "fail to init xsrf. " + str(e))
-                
-        
+
+
     def login(self):
         """获取登录后的界面，需要先运行init_xsrf"""
-        login_url = self._base_url + r"/login/phone_num"
+
+        if not len(self._config["account"]):
+            print("Please fill config.json with your account.")
+
+        login_by = 'email' if '@' in self._config["account"] else 'phone_num'
+        login_url = self._base_url + r"/login/" + login_by
+
         post_dict = {
-            'rememberme': 'y',
-            'password': self._password,
-            'phone_num': self._phone_num,
-            '_xsrf':ZhihuCommon.get_xsrf() 
+            'remember_me': 'true',
+            'password': self._config["password"],
+            '_xsrf': ZhihuCommon.get_xsrf(),
         }
+        post_dict.update({login_by: self._config["account"]})
+
         response_login = ZhihuCommon.post(login_url, post_dict)
         # response content: {"r":0, "msg": "\u767b\u9646\u6210\u529f" }
-        if response_login.json()["r"] == 0:
-            return True
-        else:
-            return False
+        return response_login.json()["r"] == 0
         #self._save_file('login_page.htm', reponse_login.text, reponse_login.encoding)
         
     def _traverse_topic(self):
@@ -501,6 +519,7 @@ class ZhihuCommon(object):
     user_json_file = "user.json"
     answer_json_file = "answer.json"
     topic_json_file = "topic.json"
+    config_json_file = "config.json"
     
     _last_get_page_fail = False #上一次调用get_page是失败的?
     _xsrf = None
@@ -535,7 +554,7 @@ class ZhihuCommon(object):
                 try_time += 1
                 response = ZhihuCommon.get_session().get(url, headers = ZhihuCommon.my_header, timeout = 30)
                 #, cert = 'F:\Programs\Class-3-Public-Primary-Certification-Authority.pem')
-                soup = BeautifulSoup(response.text)
+                soup = BeautifulSoup(response.text, "html.parser")
                 ZhihuCommon._last_get_page_fail = False
                 return response.text, soup
             except Exception as e:
