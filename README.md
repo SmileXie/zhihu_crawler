@@ -14,3 +14,6 @@ https://www.zhihu.com/topic/19776749/top-answers?page=50
 * 解析精华回答的各项属性，包括：
   * 精华回答的点赞数，答案长度；
   * 答题用户的id，获得的点赞数，地区，性别，学历，学校，专业等信息
+
+##统计结果
+* 统计结果请见：[http://www.jianshu.com/p/6d53b34165d2](http://www.jianshu.com/p/6d53b34165d2)
